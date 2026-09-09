@@ -1,0 +1,80 @@
+import { Router } from 'express';
+import validate from '../middlewares/validate.js';
+import authenticate from '../middlewares/authenticate.js';
+import authorize from '../middlewares/authorize.js';
+import { writeLimiter } from '../middlewares/rateLimiters.js';
+import { ROLES } from '../constants/roles.js';
+import { idParamSchema } from '../validators/common.js';
+import { orderListQuerySchema, rejectOrderSchema } from '../validators/order.validator.js';
+import {
+  createMenuSchema,
+  updateMenuSchema,
+  sellerMenuQuerySchema,
+  createCanteenSchema,
+  updateCanteenSchema,
+} from '../validators/seller.validator.js';
+import * as sellerController from '../controllers/seller.controller.js';
+
+/**
+ * Kumpulan jalur untuk penjual.
+ *
+ * Satu penjagaan peran menutupi seluruh cabang ini, sehingga kunci akses milik
+ * pembeli tidak dapat menjangkaunya. Kepemilikan tiap data diperiksa kembali di
+ * lapisan layanan melalui pembatasan pada kueri.
+ */
+const router = Router();
+
+router.use(authenticate, authorize(ROLES.PENJUAL));
+
+router.get('/dashboard', sellerController.getDashboard);
+
+router.get('/canteen', sellerController.getCanteen);
+router.post('/canteen', writeLimiter, validate({ body: createCanteenSchema }), sellerController.createCanteen);
+router.patch('/canteen', writeLimiter, validate({ body: updateCanteenSchema }), sellerController.updateCanteen);
+
+router.get('/menu', validate({ query: sellerMenuQuerySchema }), sellerController.listMenu);
+router.get('/menu/:id', validate({ params: idParamSchema }), sellerController.getMenuItem);
+router.post('/menu', writeLimiter, validate({ body: createMenuSchema }), sellerController.createMenuItem);
+router.patch(
+  '/menu/:id',
+  writeLimiter,
+  validate({ params: idParamSchema, body: updateMenuSchema }),
+  sellerController.updateMenuItem,
+);
+router.delete('/menu/:id', writeLimiter, validate({ params: idParamSchema }), sellerController.deleteMenuItem);
+
+router.get('/orders', validate({ query: orderListQuerySchema }), sellerController.listOrders);
+router.get('/orders/:id', validate({ params: idParamSchema }), sellerController.getOrder);
+
+router.patch(
+  '/orders/:id/accept',
+  writeLimiter,
+  validate({ params: idParamSchema }),
+  sellerController.acceptOrder,
+);
+router.patch(
+  '/orders/:id/reject',
+  writeLimiter,
+  validate({ params: idParamSchema, body: rejectOrderSchema }),
+  sellerController.rejectOrder,
+);
+router.patch(
+  '/orders/:id/process',
+  writeLimiter,
+  validate({ params: idParamSchema }),
+  sellerController.processOrder,
+);
+router.patch(
+  '/orders/:id/ready',
+  writeLimiter,
+  validate({ params: idParamSchema }),
+  sellerController.readyOrder,
+);
+router.patch(
+  '/orders/:id/complete',
+  writeLimiter,
+  validate({ params: idParamSchema }),
+  sellerController.completeOrder,
+);
+
+export default router;

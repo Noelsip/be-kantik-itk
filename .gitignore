@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Environment - JANGAN pernah commit file .env
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Runtime / cache
+coverage/
+.nyc_output/
+dist/
+build/
+tmp/
+.cache/
+
+# Editor & OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
