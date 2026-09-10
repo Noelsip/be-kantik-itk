@@ -6,11 +6,8 @@ import * as userRepository from '../repositories/user.repository.js';
 
 /**
  * Pemeriksaan kunci akses sekaligus pengambilan data pengguna terkini.
- *
- * Data pengguna dibaca ulang dari database pada setiap permintaan, bukan
- * dipercaya dari isi kunci. Dengan begitu perubahan peran dan proses keluar
- * langsung berlaku, dan tidak ada keputusan hak akses yang bersumber dari data
- * kiriman klien.
+ * Data pengguna dibaca ulang dari database pada setiap permintaan, sehingga
+ * perubahan peran dan proses keluar langsung berlaku.
  */
 export const authenticate = asyncHandler(async (req, _res, next) => {
   const token = extractBearerToken(req.headers.authorization);

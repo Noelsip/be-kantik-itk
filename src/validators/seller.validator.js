@@ -6,14 +6,13 @@ import {
   optionalBooleanSchema,
   priceSchema,
   nullableImageUrlSchema,
+  nullableWhatsappSchema,
 } from './common.js';
 
 /**
  * Aturan pemeriksaan untuk kebutuhan penjual.
- *
- * Field `canteenId` sengaja tidak diterima di berkas ini. Kantin penjual selalu
- * ditentukan dari akun yang sedang masuk, sehingga seorang penjual tidak dapat
- * menuliskan menu ke kantin milik penjual lain.
+ * Field `canteenId` sengaja tidak diterima; kantin selalu ditentukan dari akun
+ * yang sedang masuk.
  */
 
 /** Menyusun aturan teks opsional dengan batas panjang tertentu. */
@@ -69,6 +68,7 @@ export const createCanteenSchema = z
     description: optionalText(1000, 'Deskripsi'),
     location: optionalText(255, 'Lokasi'),
     imageUrl: nullableImageUrlSchema.transform((value) => value ?? null),
+    whatsapp: nullableWhatsappSchema.transform((value) => value ?? null),
     isOpen: z.boolean().default(true),
   })
   .strict('Terdapat data yang tidak dikenali');
@@ -79,6 +79,7 @@ export const updateCanteenSchema = z
     description: optionalText(1000, 'Deskripsi').optional(),
     location: optionalText(255, 'Lokasi').optional(),
     imageUrl: nullableImageUrlSchema,
+    whatsapp: nullableWhatsappSchema,
     isOpen: z.boolean().optional(),
   })
   .strict('Terdapat data yang tidak dikenali')

@@ -4,9 +4,7 @@ import { ORDER_STATUS_VALUES } from '../constants/orderStatus.js';
 
 /**
  * Aturan pemeriksaan untuk pesanan.
- *
- * Pembuatan pesanan hanya menerima catatan. Kantin, daftar item, salinan harga,
- * dan totalnya seluruhnya berasal dari keranjang serta data menu di server.
+ * Pembuatan pesanan hanya menerima catatan; sisanya berasal dari keranjang.
  */
 
 export const createOrderSchema = z

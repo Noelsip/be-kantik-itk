@@ -5,10 +5,8 @@ import ERROR_CODES from '../constants/errorCodes.js';
 
 /**
  * Penerbitan dan pemeriksaan kunci akses aplikasi.
- *
- * Isi kunci dibuat seminimal mungkin: hanya id pengguna dan nomor versi sesi.
- * Peran pengguna sengaja tidak disertakan agar perubahan peran langsung berlaku
- * tanpa menunggu kunci lama kedaluwarsa.
+ * Isi kunci hanya id pengguna dan nomor versi sesi. Peran sengaja tidak
+ * disertakan agar perubahannya langsung berlaku.
  */
 
 export function signAccessToken({ userId, tokenVersion }) {

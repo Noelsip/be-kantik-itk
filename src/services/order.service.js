@@ -16,6 +16,12 @@ import { toOrderResponse } from '../utils/presenters.js';
 import * as cartRepository from '../repositories/cart.repository.js';
 import * as orderRepository from '../repositories/order.repository.js';
 import * as canteenRepository from '../repositories/canteen.repository.js';
+import * as notificationService from './notification.service.js';
+import {
+  NOTIFICATION_TYPES,
+  buildSellerNewOrderMessage,
+  buildSellerCancelMessage,
+} from '../constants/notificationTypes.js';
 
 /** Fungsi untuk menangani pesanan dari sisi pembeli. */
 
@@ -23,8 +29,7 @@ const MAX_ORDER_NUMBER_ATTEMPTS = 5;
 
 /**
  * Menyiapkan nomor pesanan yang belum terpakai.
- * Keunikan sesungguhnya dijamin indeks unik di database; perulangan ini hanya
- * menghindari kegagalan yang terlihat oleh pengguna.
+ * Keunikan sesungguhnya dijamin indeks unik di database.
  */
 async function allocateOrderNumber(connection) {
   for (let attempt = 0; attempt < MAX_ORDER_NUMBER_ATTEMPTS; attempt += 1) {
@@ -39,13 +44,14 @@ async function allocateOrderNumber(connection) {
 /**
  * Mengubah isi keranjang menjadi pesanan.
  *
- * Seluruh langkah berjalan dalam satu transaksi, sehingga kegagalan di tengah
- * jalan tidak meninggalkan pesanan separuh jadi dan isi keranjang tetap utuh.
+ * Keranjang boleh memuat menu dari beberapa kantin, sehingga isinya dipecah
+ * menjadi satu pesanan untuk tiap kantin. Seluruhnya berjalan dalam satu
+ * transaksi, sehingga kegagalan pada salah satu kantin membatalkan semuanya.
  *
- * Harga dan total dibaca serta dihitung di sini, bukan diambil dari permintaan.
+ * Harga dan total dihitung di sini, bukan diambil dari permintaan.
  */
 export async function checkout(userId, { note = null } = {}) {
-  return withTransaction(async (connection) => {
+  const { orders, pemberitahuan } = await withTransaction(async (connection) => {
     const cart = await cartRepository.findOrCreateCartByUserId(userId, connection);
 
     // Penguncian baris menjaga harga dan ketersediaan tidak berubah antara
@@ -74,69 +80,89 @@ export async function checkout(userId, { note = null } = {}) {
       );
     }
 
-    // Pemeriksaan ulang asal kantin menutup celah bila dua penambahan keranjang
-    // berjalan bersamaan.
-    const canteenIds = new Set(items.map((item) => Number(item.canteen_id)));
-    if (canteenIds.size > 1) {
-      throw new BusinessRuleError(
-        'Keranjang berisi menu dari lebih dari satu kantin',
-        ERROR_CODES.CART_DIFFERENT_CANTEEN,
-        { statusCode: 422 },
+    // Isi keranjang dikelompokkan per kantin, lalu tiap kelompok menjadi satu
+    // pesanan tersendiri.
+    const grouped = new Map();
+    for (const item of items) {
+      const canteenId = Number(item.canteen_id);
+      if (!grouped.has(canteenId)) grouped.set(canteenId, []);
+      grouped.get(canteenId).push(item);
+    }
+
+    const orders = [];
+    const pemberitahuan = [];
+
+    for (const [canteenId, groupItems] of grouped) {
+      const canteen = await canteenRepository.findById(canteenId, connection);
+      if (!canteen) {
+        throw new NotFoundError('Kantin tidak ditemukan', ERROR_CODES.CANTEEN_NOT_FOUND);
+      }
+      if (!Number(canteen.is_open)) {
+        throw new BusinessRuleError(
+          `${canteen.name} sedang tutup. Pesanan tidak dapat dibuat saat ini.`,
+          ERROR_CODES.CANTEEN_CLOSED,
+          { statusCode: 422 },
+        );
+      }
+
+      // Menyalin nama dan harga menu apa adanya saat ini, lalu menghitung setiap
+      // subtotal dan totalnya di sisi server.
+      const orderItems = groupItems.map((item) => {
+        const quantity = Number(item.quantity);
+        const priceMinor = toMinorUnits(item.price);
+        const subtotalMinor = calculateSubtotalMinor(item.price, quantity);
+        return {
+          menuItemId: Number(item.menu_item_id),
+          menuName: item.menu_name,
+          price: toDecimalString(priceMinor),
+          quantity,
+          // Catatan per menu ikut disalin agar riwayat pesanan tetap lengkap.
+          note: item.note ?? null,
+          subtotal: toDecimalString(subtotalMinor),
+          subtotalMinor,
+        };
+      });
+
+      const totalMinor = sumMinor(orderItems.map((item) => item.subtotalMinor));
+
+      const orderNumber = await allocateOrderNumber(connection);
+      const orderId = await orderRepository.createOrder(
+        {
+          userId,
+          canteenId,
+          orderNumber,
+          note,
+          totalAmount: toDecimalString(totalMinor),
+        },
+        connection,
       );
+
+      await orderRepository.createOrderItems(orderId, orderItems, connection);
+
+      const order = await orderRepository.findById(orderId, connection);
+      const savedItems = await orderRepository.findItemsByOrderId(orderId, connection);
+      orders.push(toOrderResponse(order, savedItems));
+      pemberitahuan.push({ ownerId: Number(canteen.owner_id), order });
     }
 
-    const canteenId = Number(items[0].canteen_id);
-    const canteen = await canteenRepository.findById(canteenId, connection);
-    if (!canteen) {
-      throw new NotFoundError('Kantin tidak ditemukan', ERROR_CODES.CANTEEN_NOT_FOUND);
-    }
-    if (!Number(canteen.is_open)) {
-      throw new BusinessRuleError(
-        `${canteen.name} sedang tutup. Pesanan tidak dapat dibuat saat ini.`,
-        ERROR_CODES.CANTEEN_CLOSED,
-        { statusCode: 422 },
-      );
-    }
-
-    // Menyalin nama dan harga menu apa adanya saat ini, lalu menghitung setiap
-    // subtotal dan totalnya di sisi server.
-    const orderItems = items.map((item) => {
-      const quantity = Number(item.quantity);
-      const priceMinor = toMinorUnits(item.price);
-      const subtotalMinor = calculateSubtotalMinor(item.price, quantity);
-      return {
-        menuItemId: Number(item.menu_item_id),
-        menuName: item.menu_name,
-        price: toDecimalString(priceMinor),
-        quantity,
-        subtotal: toDecimalString(subtotalMinor),
-        subtotalMinor,
-      };
-    });
-
-    const totalMinor = sumMinor(orderItems.map((item) => item.subtotalMinor));
-
-    const orderNumber = await allocateOrderNumber(connection);
-    const orderId = await orderRepository.createOrder(
-      {
-        userId,
-        canteenId,
-        orderNumber,
-        note,
-        totalAmount: toDecimalString(totalMinor),
-      },
-      connection,
-    );
-
-    await orderRepository.createOrderItems(orderId, orderItems, connection);
-
-    // Keranjang baru dikosongkan setelah pesanan dan seluruh barisnya tersimpan.
+    // Keranjang baru dikosongkan setelah seluruh pesanan tersimpan.
     await cartRepository.clearCart(cart.id, connection);
 
-    const order = await orderRepository.findById(orderId, connection);
-    const savedItems = await orderRepository.findItemsByOrderId(orderId, connection);
-    return toOrderResponse(order, savedItems);
+    return { orders, pemberitahuan };
   });
+
+  // Pemberitahuan dikirim sesudah transaksi disimpan, sehingga tidak pernah
+  // merujuk pesanan yang ternyata batal tersimpan.
+  for (const { ownerId, order } of pemberitahuan) {
+    await notificationService.notify({
+      userId: ownerId,
+      type: NOTIFICATION_TYPES.ORDER_CREATED,
+      orderId: Number(order.id),
+      ...buildSellerNewOrderMessage(order, order.buyer_name),
+    });
+  }
+
+  return orders;
 }
 
 /** Mengambil daftar pesanan milik seorang pembeli. */
@@ -191,7 +217,7 @@ export async function getBuyerOrder(userId, orderId) {
  * Pembatalan hanya mungkin selama pesanan belum diterima penjual.
  */
 export async function cancelOrder(userId, orderId) {
-  return withTransaction(async (connection) => {
+  const { hasil, pemberitahuan } = await withTransaction(async (connection) => {
     const order = await orderRepository.findForStatusUpdate(orderId, { userId }, connection);
     if (!order) {
       throw new NotFoundError('Pesanan tidak ditemukan', ERROR_CODES.ORDER_NOT_FOUND);
@@ -214,6 +240,23 @@ export async function cancelOrder(userId, orderId) {
 
     const updated = await orderRepository.updateStatus(orderId, ORDER_STATUS.DIBATALKAN, {}, connection);
     const items = await orderRepository.findItemsByOrderId(orderId, connection);
-    return toOrderResponse(updated, items);
+
+    const canteen = await canteenRepository.findById(updated.canteen_id, connection);
+
+    return {
+      hasil: toOrderResponse(updated, items),
+      pemberitahuan: canteen ? { ownerId: Number(canteen.owner_id), order: updated } : null,
+    };
   });
+
+  if (pemberitahuan) {
+    await notificationService.notify({
+      userId: pemberitahuan.ownerId,
+      type: NOTIFICATION_TYPES.ORDER_CANCELLED,
+      orderId: Number(pemberitahuan.order.id),
+      ...buildSellerCancelMessage(pemberitahuan.order, pemberitahuan.order.buyer_name),
+    });
+  }
+
+  return hasil;
 }

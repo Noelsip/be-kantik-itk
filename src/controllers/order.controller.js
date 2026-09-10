@@ -4,10 +4,16 @@ import * as orderService from '../services/order.service.js';
 
 /** Fungsi untuk menangani permintaan pesanan dari sisi pembeli. */
 
-/** Menangani pembuatan pesanan dari isi keranjang. */
+/**
+ * Menangani pembuatan pesanan dari isi keranjang.
+ * Keranjang yang memuat beberapa kantin menghasilkan satu pesanan untuk tiap
+ * kantin, sehingga jawabannya selalu berupa daftar.
+ */
 export const createOrder = asyncHandler(async (req, res) => {
-  const order = await orderService.checkout(req.user.id, { note: req.body.note });
-  return sendCreated(res, { message: 'Pesanan berhasil dibuat', data: order });
+  const orders = await orderService.checkout(req.user.id, { note: req.body.note });
+  const message =
+    orders.length === 1 ? 'Pesanan berhasil dibuat' : `${orders.length} pesanan berhasil dibuat`;
+  return sendCreated(res, { message, data: orders });
 });
 
 /** Menangani permintaan daftar pesanan. */

@@ -5,13 +5,8 @@ import config from '../src/config/env.js';
 
 /**
  * Data contoh untuk keperluan pengembangan.
- *
- * Seluruh akun di bawah ini merupakan data uji coba. Tidak ada kata sandi yang
- * dibuat karena sistem ini memang tidak menyimpannya. Setiap akun hasil seed
- * memiliki `google_id` kosong, dan akan tertaut ke akun Google yang sebenarnya
- * pada saat alamat tersebut pertama kali masuk.
- *
- * Skrip ini aman dijalankan berulang kali.
+ * Akun hasil seed tidak memiliki kata sandi maupun `google_id`, dan tertaut ke
+ * akun Google saat alamatnya pertama kali masuk. Aman dijalankan berulang.
  */
 
 const DEV_MARKER = '[DEV]';

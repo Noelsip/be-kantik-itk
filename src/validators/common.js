@@ -3,9 +3,7 @@ import { DEFAULT_LIMIT, DEFAULT_PAGE, MAX_LIMIT } from '../utils/pagination.js';
 
 /**
  * Potongan aturan pemeriksaan yang dipakai berulang.
- *
- * Nilai pada query selalu berupa teks, sehingga setiap angka dan penanda benar
- * atau salah dikonversi di sini.
+ * Nilai pada query selalu berupa teks, sehingga dikonversi di sini.
  */
 
 /** Bilangan bulat positif untuk id data. */
@@ -31,8 +29,7 @@ export const optionalBooleanSchema = z
 
 /**
  * Kata kunci pencarian.
- * Teks kosong diubah menjadi tidak terisi agar tidak menambah kondisi pencarian
- * yang tidak berguna pada kueri.
+ * Teks kosong diubah menjadi tidak terisi agar tidak menambah kondisi kueri.
  */
 export const searchSchema = z
   .string()
@@ -43,8 +40,7 @@ export const searchSchema = z
 
 /**
  * Alamat gambar yang diterima.
- * Dibatasi pada http dan https agar nilai tersimpan tidak dapat berubah menjadi
- * alamat yang menjalankan skrip pada aplikasi yang menampilkannya.
+ * Dibatasi pada http dan https agar nilainya tidak dapat menjalankan skrip.
  */
 export const imageUrlSchema = z
   .string()
@@ -67,3 +63,39 @@ export const priceSchema = z.coerce
   .min(0, 'Harga tidak boleh negatif')
   .max(9_999_999_999, 'Harga melebihi batas yang diizinkan')
   .refine((value) => Number.isFinite(value), 'Harga tidak valid');
+
+/**
+ * Nomor WhatsApp Indonesia, disimpan dalam bentuk baku berawalan 62.
+ * Bentuk 08xx, 8xx, 62xx, maupun +62xx diterima, sedangkan spasi, tanda hubung,
+ * dan tanda kurung diabaikan.
+ */
+export const whatsappSchema = z
+  .string()
+  .trim()
+  .max(25, 'Nomor WhatsApp terlalu panjang')
+  .transform((value) => value.replace(/[\s\-().]/g, ''))
+  .refine((value) => /^(\+?62|0)?8\d+$/.test(value), 'Nomor WhatsApp tidak valid')
+  .transform((value) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.startsWith('62')) return digits;
+    if (digits.startsWith('0')) return `62${digits.slice(1)}`;
+    return `62${digits}`;
+  })
+  .refine(
+    (value) => value.length >= 10 && value.length <= 15,
+    'Nomor WhatsApp harus terdiri dari 10 sampai 15 angka',
+  );
+
+export const nullableWhatsappSchema = whatsappSchema.nullable().optional();
+
+/** Catatan singkat untuk satu baris menu, misalnya tingkat kepedasan. */
+export const itemNoteSchema = z
+  .string()
+  .trim()
+  .max(255, 'Catatan maksimal 255 karakter')
+  .nullable()
+  .optional()
+  .transform((value) => (value ? value : null));
+
+/** Arah pengurutan daftar. */
+export const sortOrderSchema = z.enum(['asc', 'desc']).default('asc');

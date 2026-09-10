@@ -7,14 +7,8 @@ import logger from '../src/utils/logger.js';
 
 /**
  * Penjalan migrasi skema database.
- *
- * Setiap berkas SQL pada database/migrations dijalankan sekali sesuai urutan
- * nama berkasnya, dan catatan penerapannya disimpan pada tabel
- * `schema_migrations`.
- *
- * Cara pakai:
- *   node scripts/migrate.js           menjalankan migrasi yang belum diterapkan
- *   node scripts/migrate.js --fresh   menghapus database lalu menerapkan ulang
+ * Tiap berkas dijalankan sekali dan dicatat pada `schema_migrations`.
+ * Pilihan --fresh menghapus database lalu membangunnya ulang.
  */
 
 const migrationsDir = path.join(
@@ -37,9 +31,7 @@ async function connectServer() {
 
 /**
  * Memecah isi berkas migrasi menjadi kumpulan perintah.
- *
- * Pemecahan memperhatikan tanda titik koma yang berada di dalam teks maupun
- * komentar, sehingga tidak ikut terpotong.
+ * Titik koma di dalam teks maupun komentar tidak ikut memotong.
  */
 function splitStatements(sql) {
   const statements = [];
@@ -127,11 +119,8 @@ async function run() {
       const sql = await readFile(path.join(migrationsDir, file), 'utf8');
       const statements = splitStatements(sql);
 
-      // MySQL menyimpan perubahan struktur secara otomatis, sehingga kegagalan di
-      // tengah berkas tidak dapat dibatalkan. Berkas hanya dicatat sebagai
-      // diterapkan bila seluruh perintahnya berhasil; bila gagal, proses berhenti
-      // dan berkas tetap dianggap belum diterapkan. Seluruh perintah ditulis
-      // dengan IF NOT EXISTS sehingga aman dijalankan ulang setelah diperbaiki.
+      // Berkas dicatat diterapkan hanya bila seluruh perintahnya berhasil.
+      // Perintah memakai IF NOT EXISTS sehingga aman dijalankan ulang.
       try {
         for (const statement of statements) {
           await server.query(statement);

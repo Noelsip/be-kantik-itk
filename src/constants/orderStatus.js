@@ -1,8 +1,6 @@
 /**
- * Status pesanan sekaligus sumber tunggal aturan perpindahan statusnya.
- *
- * Nilai yang disimpan dan dikirim melalui API memakai huruf kecil, sama seperti
- * ENUM di database. Bentuk huruf besar hanya dipakai pada pesan untuk pengguna.
+ * Status pesanan sekaligus sumber tunggal aturan perpindahannya.
+ * Nilai tersimpan memakai huruf kecil; huruf besar hanya untuk pesan pengguna.
  */
 export const ORDER_STATUS = Object.freeze({
   MENUNGGU_KONFIRMASI: 'menunggu_konfirmasi',
@@ -21,22 +19,24 @@ export const ORDER_STATUS_LABELS = Object.freeze({
   [ORDER_STATUS.MENUNGGU_KONFIRMASI]: 'Menunggu Konfirmasi',
   [ORDER_STATUS.DITERIMA]: 'Diterima',
   [ORDER_STATUS.DITOLAK]: 'Ditolak',
-  [ORDER_STATUS.DIPROSES]: 'Diproses',
+  [ORDER_STATUS.DIPROSES]: 'Sedang Disiapkan',
   [ORDER_STATUS.SIAP_DIAMBIL]: 'Siap Diambil',
   [ORDER_STATUS.SELESAI]: 'Selesai',
   [ORDER_STATUS.DIBATALKAN]: 'Dibatalkan',
 });
 
-/**
- * Perpindahan status yang diizinkan.
- * Perpindahan di luar daftar ini selalu ditolak.
- */
+/** Perpindahan status yang diizinkan; di luar daftar ini selalu ditolak. */
 export const ORDER_STATUS_TRANSITIONS = Object.freeze({
+  // Penerimaan pesanan langsung memindahkan status ke `diproses`, sehingga
+  // penjual cukup satu tindakan dan pembeli langsung melihat pesanannya
+  // sedang disiapkan.
   [ORDER_STATUS.MENUNGGU_KONFIRMASI]: Object.freeze([
-    ORDER_STATUS.DITERIMA,
+    ORDER_STATUS.DIPROSES,
     ORDER_STATUS.DITOLAK,
     ORDER_STATUS.DIBATALKAN,
   ]),
+  // Status `diterima` tidak lagi dihasilkan alur baru, dan hanya tersisa bagi
+  // pesanan lama agar tetap dapat dilanjutkan.
   [ORDER_STATUS.DITERIMA]: Object.freeze([ORDER_STATUS.DIPROSES]),
   [ORDER_STATUS.DIPROSES]: Object.freeze([ORDER_STATUS.SIAP_DIAMBIL]),
   [ORDER_STATUS.SIAP_DIAMBIL]: Object.freeze([ORDER_STATUS.SELESAI]),

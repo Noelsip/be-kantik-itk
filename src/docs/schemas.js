@@ -4,14 +4,12 @@ import ERROR_CODES from '../constants/errorCodes.js';
 
 /**
  * Kumpulan skema komponen OpenAPI.
- *
- * Daftar nilai tetap diambil dari konstanta yang sama dengan yang dipakai saat
- * aplikasi berjalan, sehingga dokumentasi tidak akan menyimpang dari perilaku
- * API yang sebenarnya.
+ * Daftar nilai tetap diambil dari konstanta yang dipakai aplikasi, sehingga
+ * dokumentasi tidak menyimpang dari perilakunya.
  */
 
 export const schemas = {
-  // --- Envelope -------------------------------------------------------------
+  // Bentuk amplop respons.
 
   SuccessEnvelope: {
     type: 'object',
@@ -95,7 +93,7 @@ export const schemas = {
     },
   },
 
-  // --- Akun -----------------------------------------------------------------
+  // Skema akun pengguna.
 
   User: {
     type: 'object',
@@ -108,6 +106,13 @@ export const schemas = {
         description:
           'Identitas kampus (NIM/NIP). Diturunkan otomatis dari bagian depan alamat email saat akun pertama kali dibuat.',
       },
+      nim: {
+        type: ['string', 'null'],
+        example: '11231001',
+        description:
+          'NIM mahasiswa, diambil dari bagian depan alamat email ketika seluruhnya angka dan ' +
+          'domainnya @student.itk.ac.id. Bernilai null untuk dosen maupun akun umum kampus.',
+      },
       name: { type: 'string', example: 'Budi Santoso' },
       email: { type: 'string', format: 'email', example: 'budi@student.itk.ac.id' },
       role: {
@@ -118,6 +123,40 @@ export const schemas = {
       },
       roleLabel: { type: 'string', example: 'Pembeli', description: 'Nama peran yang siap ditampilkan.' },
       profileImage: { type: ['string', 'null'], example: 'https://lh3.googleusercontent.com/a/foto.jpg' },
+      whatsapp: {
+        type: ['string', 'null'],
+        example: '6281234567890',
+        description:
+          'Nomor WhatsApp dalam bentuk baku berawalan 62 tanpa tanda tambah, siap dipakai pada ' +
+          'tautan wa.me. Penulisan 08xx, 8xx, 62xx, maupun +62xx diterima saat menyimpan dan ' +
+          'dibakukan oleh server.',
+      },
+      affiliation: {
+        type: ['string', 'null'],
+        example: 'Fakultas Sains dan Teknologi Informasi',
+        description:
+          'Asal pengguna yang siap ditampilkan. Berisi nama fakultas untuk alamat NIM ' +
+          'di @student.itk.ac.id, `Dosen ITK` untuk @lecture.itk.ac.id, dan `Email Umum ITK` ' +
+          'untuk @itk.ac.id. Dua domain terakhir hanya berlaku bila bagian depan alamat ' +
+          'bukan angka, karena NIM hanya sah pada domain mahasiswa.',
+      },
+      faculty: {
+        type: ['string', 'null'],
+        example: 'Fakultas Sains dan Teknologi Informasi',
+        description: 'Nama fakultas. Hanya terisi untuk mahasiswa.',
+      },
+      studyProgram: {
+        type: ['string', 'null'],
+        example: 'Informatika',
+        description: 'Nama program studi. Hanya terisi untuk mahasiswa.',
+      },
+      studyProgramCode: {
+        type: ['string', 'null'],
+        example: '11',
+        description:
+          'Dua digit awal NIM yang menentukan program studi. Hanya dibaca ketika bagian ' +
+          'depan alamat seluruhnya angka dan domainnya tepat @student.itk.ac.id.',
+      },
       createdAt: { type: 'string', format: 'date-time' },
       updatedAt: { type: 'string', format: 'date-time' },
     },
@@ -138,7 +177,7 @@ export const schemas = {
     },
   },
 
-  // --- Kantin & menu --------------------------------------------------------
+  // Skema kantin dan menu.
 
   Canteen: {
     type: 'object',
@@ -148,6 +187,11 @@ export const schemas = {
       description: { type: ['string', 'null'], example: 'Kantin Fakultas Sains dan Teknologi Informasi' },
       location: { type: ['string', 'null'], example: 'Gedung A, Lantai 1' },
       imageUrl: { type: ['string', 'null'] },
+      whatsapp: {
+        type: ['string', 'null'],
+        example: '6281211112222',
+        description: 'Nomor WhatsApp kantin dalam bentuk baku berawalan 62, siap dipakai pada tautan wa.me.',
+      },
       isOpen: { type: 'boolean', example: true, description: 'Kantin sedang buka atau tutup.' },
       statusLabel: { type: 'string', enum: ['Buka', 'Tutup'], example: 'Buka' },
       menuCount: { type: 'integer', example: 8, description: 'Jumlah menu aktif. Hanya ada pada endpoint daftar kantin.' },
@@ -200,12 +244,19 @@ export const schemas = {
         example: true,
         description: 'Menu yang bernilai `false` tidak dapat dimasukkan ke keranjang.',
       },
+      isFavorite: {
+        type: 'boolean',
+        example: false,
+        description:
+          'Penanda menu favorit milik pembeli yang sedang masuk. Hanya ikut terkirim pada jalur ' +
+          'katalog dan favorit yang diakses pembeli, tidak pada jalur penjual.',
+      },
       createdAt: { type: 'string', format: 'date-time' },
       updatedAt: { type: 'string', format: 'date-time' },
     },
   },
 
-  // --- Keranjang ------------------------------------------------------------
+  // Skema keranjang belanja.
 
   CartItem: {
     type: 'object',
@@ -216,6 +267,14 @@ export const schemas = {
       price: { type: 'number', example: 15000 },
       quantity: { type: 'integer', example: 2 },
       subtotal: { type: 'number', example: 30000, description: 'Harga dikali jumlah, dihitung oleh server.' },
+      note: {
+        type: ['string', 'null'],
+        example: 'Pedas sedikit',
+        maxLength: 255,
+        description:
+          'Catatan khusus untuk menu ini saja, terpisah dari catatan tingkat pesanan. ' +
+          'Ikut tersalin ke baris pesanan saat pesanan dibuat.',
+      },
       imageUrl: { type: ['string', 'null'] },
       isAvailable: { type: 'boolean', example: true },
       category: {
@@ -228,14 +287,48 @@ export const schemas = {
   Cart: {
     type: 'object',
     description:
-      'Keranjang milik pembeli. Satu pembeli hanya punya satu keranjang, dan seluruh isinya harus berasal dari satu kantin yang sama.',
+      'Keranjang milik pembeli. Satu pembeli hanya punya satu keranjang, dan isinya boleh berasal dari beberapa kantin sekaligus.',
     properties: {
       id: { type: 'integer', example: 4 },
       canteen: {
         allOf: [{ $ref: '#/components/schemas/Canteen' }],
-        description: 'Kantin asal isi keranjang. Bernilai `null` bila keranjang kosong.',
+        description:
+          'Kantin asal isi keranjang, hanya terisi bila seluruh isinya berasal dari satu kantin. ' +
+          'Bernilai `null` ketika keranjang kosong maupun bercampur.',
       },
-      items: { type: 'array', items: { $ref: '#/components/schemas/CartItem' } },
+      canteenCount: {
+        type: 'integer',
+        example: 2,
+        description: 'Banyaknya kantin yang terwakili pada keranjang, sekaligus jumlah pesanan yang akan terbentuk.',
+      },
+      canteens: {
+        type: 'array',
+        description:
+          'Isi keranjang yang dikelompokkan per kantin, lengkap dengan total tiap kelompok. ' +
+          'Tiap kelompok akan menjadi satu pesanan tersendiri.',
+        items: {
+          type: 'object',
+          properties: {
+            canteen: {
+              type: 'object',
+              properties: {
+                id: { type: 'integer', example: 1 },
+                name: { type: ['string', 'null'], example: 'Kantin FSTI' },
+                isOpen: { type: 'boolean', example: true },
+              },
+            },
+            items: { type: 'array', items: { $ref: '#/components/schemas/CartItem' } },
+            itemCount: { type: 'integer', example: 2 },
+            totalQuantity: { type: 'integer', example: 3 },
+            totalAmount: { type: 'number', example: 35000 },
+          },
+        },
+      },
+      items: {
+        type: 'array',
+        description: 'Seluruh isi keranjang tanpa pengelompokan.',
+        items: { $ref: '#/components/schemas/CartItem' },
+      },
       itemCount: { type: 'integer', example: 2, description: 'Banyaknya baris menu.' },
       totalQuantity: { type: 'integer', example: 3, description: 'Total seluruh jumlah porsi.' },
       totalAmount: { type: 'number', example: 35000, description: 'Total harga, dihitung oleh server.' },
@@ -248,7 +341,72 @@ export const schemas = {
     },
   },
 
-  // --- Pesanan --------------------------------------------------------------
+  ProfileStats: {
+    type: 'object',
+    description:
+      'Ringkasan angka untuk halaman profil, dihitung langsung di database. Isinya menyesuaikan peran pengguna.',
+    properties: {
+      role: { type: 'string', enum: ['pembeli', 'penjual'] },
+      orders: {
+        type: 'object',
+        description:
+          'Bagi pembeli, dihitung dari pesanan miliknya. Bagi penjual, dari pesanan yang masuk ke kantinnya.',
+        properties: {
+          total: { type: 'integer', example: 12 },
+          active: { type: 'integer', example: 1, description: 'Pesanan yang masih berjalan.' },
+          completed: { type: 'integer', example: 9 },
+          rejected: { type: 'integer', example: 1 },
+          cancelled: { type: 'integer', example: 1 },
+          history: { type: 'integer', example: 11, description: 'Selesai, ditolak, dan dibatalkan.' },
+        },
+      },
+      favoriteCount: {
+        type: 'integer',
+        example: 5,
+        description: 'Hanya untuk pembeli. Tidak disertakan pada penjual.',
+      },
+      menuCount: {
+        type: 'integer',
+        example: 8,
+        description: 'Hanya untuk penjual. Jumlah menu aktif pada kantinnya.',
+      },
+    },
+  },
+
+  // Skema notifikasi.
+
+  Notification: {
+    type: 'object',
+    description:
+      'Satu baris riwayat notifikasi. Riwayat tetap tersimpan walau pesan push tidak sampai, sehingga halaman notifikasi selalu utuh.',
+    properties: {
+      id: { type: 'integer', example: 12 },
+      type: {
+        type: 'string',
+        enum: ['order_created', 'order_status_changed', 'order_cancelled'],
+        example: 'order_status_changed',
+      },
+      title: { type: 'string', example: 'Pesanan sedang disiapkan' },
+      body: {
+        type: 'string',
+        example: 'Kantin FSTI menerima pesanan ORD-20260909-1234 dan sedang menyiapkannya.',
+      },
+      isRead: { type: 'boolean', example: false },
+      readAt: { type: ['string', 'null'], format: 'date-time' },
+      order: {
+        type: ['object', 'null'],
+        description: 'Pesanan yang dirujuk notifikasi ini, bila ada.',
+        properties: {
+          id: { type: 'integer', example: 7 },
+          orderNumber: { type: ['string', 'null'], example: 'ORD-20260909-1234' },
+          status: { type: ['string', 'null'], example: 'diproses' },
+        },
+      },
+      createdAt: { type: 'string', format: 'date-time' },
+    },
+  },
+
+  // Skema pesanan.
 
   OrderItem: {
     type: 'object',
@@ -261,6 +419,12 @@ export const schemas = {
       price: { type: 'number', example: 15000, description: 'Harga satuan pada saat pesanan dibuat.' },
       quantity: { type: 'integer', example: 2 },
       subtotal: { type: 'number', example: 30000 },
+      note: {
+        type: ['string', 'null'],
+        example: 'Pedas sedikit',
+        maxLength: 255,
+        description: 'Catatan khusus untuk menu ini saja, terpisah dari catatan tingkat pesanan.',
+      },
     },
   },
 

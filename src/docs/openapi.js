@@ -4,9 +4,7 @@ import config from '../config/env.js';
 
 /**
  * Berkas OpenAPI yang menjadi sumber tampilan dokumentasi Scalar.
- *
- * Dokumen disusun dari potongan skema dan jalur, lalu disajikan pada
- * /openapi.json sementara halaman bacanya berada di /docs.
+ * Disajikan pada /openapi.json, dengan halaman bacanya di /docs-api.
  */
 
 const description = [
@@ -62,6 +60,19 @@ const tags = [
   { name: 'Profil', description: 'Membaca dan mengubah data profil pengguna.' },
   { name: 'Kantin', description: 'Menelusuri kantin beserta menunya.' },
   { name: 'Menu', description: 'Mencari, menyaring, dan melihat detail menu.' },
+  {
+    name: 'Notifikasi',
+    description:
+      'Riwayat notifikasi dan pendaftaran perangkat penerima pesan push. Tersedia untuk kedua peran.',
+  },
+  {
+    name: 'Unggahan',
+    description: 'Mengunggah berkas gambar untuk foto profil, foto menu, maupun foto kantin.',
+  },
+  {
+    name: 'Favorit',
+    description: 'Menandai menu favorit milik pembeli. Penandaan bersifat idempoten.',
+  },
   {
     name: 'Keranjang',
     description:
@@ -151,32 +162,6 @@ const responses = {
     'MENU_UNAVAILABLE',
     'Menu "Ayam Geprek" sedang tidak tersedia',
   ),
-  CartConflict: {
-    description: [
-      'Menu berasal dari kantin yang berbeda dengan isi keranjang saat ini.',
-      '',
-      'Bagian `error.details` memuat kantin lama dan kantin baru, sehingga aplikasi dapat',
-      'menampilkan konfirmasi. Bila pengguna setuju, kirim ulang permintaan yang sama',
-      'dengan `replaceCanteen: true`.',
-    ].join('\n'),
-    content: {
-      'application/json': {
-        schema: { $ref: '#/components/schemas/ErrorEnvelope' },
-        example: {
-          success: false,
-          message:
-            'Keranjang berisi menu dari Kantin FSTI. Kosongkan keranjang terlebih dahulu untuk memesan dari kantin berbeda.',
-          error: {
-            code: 'CART_DIFFERENT_CANTEEN',
-            details: {
-              currentCanteen: { id: 1, name: 'Kantin FSTI' },
-              newCanteen: { id: 2, name: 'Kantin Teknik' },
-            },
-          },
-        },
-      },
-    },
-  },
   CheckoutFailed: {
     description: [
       'Pesanan tidak dapat dibuat. Kemungkinan penyebabnya:',
@@ -184,8 +169,7 @@ const responses = {
       '- `CART_EMPTY` — keranjang masih kosong.',
       '- `MENU_UNAVAILABLE` — ada menu yang sudah tidak tersedia.',
       '- `MENU_NOT_FOUND` — ada menu yang sudah dihapus penjual.',
-      '- `CANTEEN_CLOSED` — kantin sedang tutup.',
-      '- `CART_DIFFERENT_CANTEEN` — isi keranjang berasal dari lebih dari satu kantin.',
+      '- `CANTEEN_CLOSED` — salah satu kantin pada keranjang sedang tutup.',
       '',
       'Tidak ada pesanan yang tersimpan dan isi keranjang tetap utuh.',
     ].join('\n'),
@@ -226,6 +210,11 @@ const responses = {
       },
     },
   },
+  PayloadTooLarge: errorResponse(
+    'Berkas yang diunggah melebihi batas ukuran.',
+    'PAYLOAD_TOO_LARGE',
+    'Ukuran gambar melebihi batas 5 MB.',
+  ),
   TooManyRequests: errorResponse(
     'Permintaan terlalu sering dalam waktu singkat.',
     'RATE_LIMITED',

@@ -4,10 +4,8 @@ import { ROLE_LABELS } from '../constants/roles.js';
 
 /**
  * Pengubah baris database menjadi bentuk respons API.
- *
- * Pemusatan di satu berkas menjaga agar kolom internal seperti `token_version`,
- * `google_id`, atau `deleted_at` tidak pernah ikut terkirim, dan nilai uang
- * selalu berupa angka.
+ * Pemusatan di satu berkas menjaga kolom internal seperti `token_version` dan
+ * `google_id` tidak ikut terkirim, dan nilai uang selalu berupa angka.
  */
 
 const toBoolean = (value) => Boolean(Number(value));
@@ -18,11 +16,17 @@ export function toUserResponse(user) {
   return {
     id: Number(user.id),
     campusId: user.campus_id,
+    nim: user.nim ?? null,
     name: user.name,
     email: user.email,
     role: user.role,
     roleLabel: ROLE_LABELS[user.role] ?? user.role,
     profileImage: user.profile_image,
+    whatsapp: user.whatsapp ?? null,
+    affiliation: user.affiliation ?? null,
+    faculty: user.faculty ?? null,
+    studyProgram: user.study_program ?? null,
+    studyProgramCode: user.study_program_code ?? null,
     createdAt: toIsoString(user.created_at),
     updatedAt: toIsoString(user.updated_at),
   };
@@ -37,6 +41,7 @@ export function toCanteenResponse(canteen) {
     description: canteen.description,
     location: canteen.location,
     imageUrl: canteen.image_url,
+    whatsapp: canteen.whatsapp ?? null,
     isOpen,
     statusLabel: isOpen ? 'Buka' : 'Tutup',
     createdAt: toIsoString(canteen.created_at),
@@ -64,7 +69,7 @@ export function toCategoryResponse(category) {
 
 export function toMenuResponse(menu) {
   if (!menu) return null;
-  return {
+  const response = {
     id: Number(menu.id),
     canteenId: Number(menu.canteen_id),
     canteenName: menu.canteen_name ?? null,
@@ -81,6 +86,9 @@ export function toMenuResponse(menu) {
     createdAt: toIsoString(menu.created_at),
     updatedAt: toIsoString(menu.updated_at),
   };
+  // Penanda favorit hanya ikut terkirim pada jalur yang membacanya untuk pembeli.
+  if (menu.is_favorite !== undefined) response.isFavorite = toBoolean(menu.is_favorite);
+  return response;
 }
 
 export function toCartItemResponse(item) {
@@ -94,6 +102,7 @@ export function toCartItemResponse(item) {
     price,
     quantity,
     subtotal: Number((price * quantity).toFixed(2)),
+    note: item.note ?? null,
     imageUrl: item.image_url,
     isAvailable: toBoolean(item.is_available),
     category:
@@ -112,6 +121,7 @@ export function toOrderItemResponse(item) {
     menuName: item.menu_name,
     price: toAmountNumber(item.price),
     quantity: Number(item.quantity),
+    note: item.note ?? null,
     subtotal: toAmountNumber(item.subtotal),
   };
 }
@@ -154,5 +164,27 @@ export function toSellerOrderResponse(order, items = []) {
       campusId: order.buyer_campus_id ?? null,
       email: order.buyer_email ?? null,
     },
+  };
+}
+
+/** Menyusun bentuk notifikasi untuk aplikasi. */
+export function toNotificationResponse(notification) {
+  if (!notification) return null;
+  return {
+    id: Number(notification.id),
+    type: notification.type,
+    title: notification.title,
+    body: notification.body,
+    isRead: notification.read_at !== null,
+    readAt: toIsoString(notification.read_at),
+    order:
+      notification.order_id === null || notification.order_id === undefined
+        ? null
+        : {
+            id: Number(notification.order_id),
+            orderNumber: notification.order_number ?? null,
+            status: notification.order_status ?? null,
+          },
+    createdAt: toIsoString(notification.created_at),
   };
 }

@@ -4,9 +4,7 @@ import { ROLE_LABELS } from '../constants/roles.js';
 
 /**
  * Pembatas akses berdasarkan peran pengguna.
- *
- * Dijalankan setelah pemeriksaan kunci akses, karena peran yang dibaca berasal
- * dari baris pengguna di database.
+ * Dijalankan setelah pemeriksaan kunci akses karena peran dibaca dari database.
  */
 export function authorize(...allowedRoles) {
   return function authorizeMiddleware(req, _res, next) {

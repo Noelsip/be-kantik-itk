@@ -1,8 +1,6 @@
 /**
  * Kode kesalahan yang dikirim pada `error.code`.
- *
- * Aplikasi klien sebaiknya bercabang berdasarkan kode ini, bukan teks pesan,
- * karena teks pesan dapat berubah sewaktu-waktu.
+ * Aplikasi klien sebaiknya bercabang berdasarkan kode ini, bukan teks pesan.
  */
 export const ERROR_CODES = Object.freeze({
   // Umum

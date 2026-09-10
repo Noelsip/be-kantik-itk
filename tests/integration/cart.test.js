@@ -71,7 +71,7 @@ test('menolak menu yang sedang tidak tersedia', async () => {
   assert.equal(body.error.code, 'MENU_UNAVAILABLE');
 });
 
-test('menolak menu dari kantin yang berbeda', async () => {
+test('menerima menu dari kantin yang berbeda dalam satu keranjang', async () => {
   await emptyCart();
   await ctx.request('POST', '/api/cart/items', {
     token: ctx.tokens.buyer,
@@ -83,29 +83,46 @@ test('menolak menu dari kantin yang berbeda', async () => {
     body: { menuItemId: ctx.fixtures.menu.mieGorengB, quantity: 1 },
   });
 
-  assert.equal(status, 409);
-  assert.equal(body.error.code, 'CART_DIFFERENT_CANTEEN');
-  // Keranjang yang sudah ada tidak berubah oleh permintaan yang ditolak.
-  const { body: cart } = await ctx.request('GET', '/api/cart', { token: ctx.tokens.buyer });
-  assert.equal(cart.data.items.length, 1);
-  assert.equal(cart.data.canteen.id, ctx.fixtures.canteenA);
+  assert.equal(status, 201, 'menu dari kantin berbeda boleh bercampur');
+  assert.equal(body.data.items.length, 2);
+  assert.equal(body.data.canteenCount, 2);
+  assert.equal(body.data.canteen, null, 'kantin tunggal kosong ketika bercampur');
 });
 
-test('persetujuan ganti kantin mengosongkan keranjang lalu berpindah kantin', async () => {
+test('isi keranjang dikelompokkan per kantin beserta totalnya', async () => {
   await emptyCart();
   await ctx.request('POST', '/api/cart/items', {
     token: ctx.tokens.buyer,
+    body: { menuItemId: ctx.fixtures.menu.nasiGoreng, quantity: 2 },
+  });
+  await ctx.request('POST', '/api/cart/items', {
+    token: ctx.tokens.buyer,
+    body: { menuItemId: ctx.fixtures.menu.mieGorengB, quantity: 1 },
+  });
+
+  const { body } = await ctx.request('GET', '/api/cart', { token: ctx.tokens.buyer });
+  assert.equal(body.data.canteenCount, 2);
+  assert.equal(body.data.totalAmount, 44000, 'dua kali 15000 ditambah 14000');
+
+  const perKantin = new Map(body.data.canteens.map((g) => [g.canteen.id, g]));
+  const kantinA = perKantin.get(ctx.fixtures.canteenA);
+  const kantinB = perKantin.get(ctx.fixtures.canteenB);
+
+  assert.equal(kantinA.totalAmount, 30000);
+  assert.equal(kantinA.totalQuantity, 2);
+  assert.equal(kantinA.canteen.name, 'Kantin FSTI');
+  assert.equal(kantinB.totalAmount, 14000);
+  assert.equal(kantinB.items.length, 1);
+});
+
+test('keranjang berisi satu kantin tetap menyertakan kantin tunggalnya', async () => {
+  await emptyCart();
+  const { body } = await ctx.request('POST', '/api/cart/items', {
+    token: ctx.tokens.buyer,
     body: { menuItemId: ctx.fixtures.menu.nasiGoreng, quantity: 1 },
   });
-
-  const { status, body } = await ctx.request('POST', '/api/cart/items', {
-    token: ctx.tokens.buyer,
-    body: { menuItemId: ctx.fixtures.menu.mieGorengB, quantity: 1, replaceCanteen: true },
-  });
-
-  assert.equal(status, 201);
-  assert.equal(body.data.items.length, 1);
-  assert.equal(body.data.canteen.id, ctx.fixtures.canteenB);
+  assert.equal(body.data.canteenCount, 1);
+  assert.equal(body.data.canteen.id, ctx.fixtures.canteenA);
 });
 
 test('mengubah jumlah salah satu item keranjang', async () => {

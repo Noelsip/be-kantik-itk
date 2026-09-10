@@ -9,33 +9,59 @@ import * as canteenRepository from '../repositories/canteen.repository.js';
 
 /**
  * Fungsi untuk mengatur isi keranjang belanja.
- *
- * Aturan bahwa satu keranjang hanya boleh memuat menu dari satu kantin
- * ditegakkan di sini, di dalam transaksi, tanpa mengandalkan pemeriksaan di
- * sisi aplikasi.
+ * Keranjang boleh memuat menu dari beberapa kantin, dan isinya dikelompokkan
+ * per kantin karena satu pesanan hanya memuat menu dari satu kantin.
  */
 
-/** Menyusun tampilan keranjang lengkap dengan kantin asal dan total harga. */
+/** Menjumlahkan harga sekumpulan item keranjang dalam satuan terkecil. */
+function sumItemsMinor(items) {
+  return sumMinor(items.map((item) => calculateSubtotalMinor(item.price, Number(item.quantity))));
+}
+
+/** Menghitung jumlah porsi pada sekumpulan item keranjang. */
+function sumQuantity(items) {
+  return items.reduce((sum, item) => sum + Number(item.quantity), 0);
+}
+
+/** Menyusun tampilan keranjang, lengkap dengan pengelompokan per kantin. */
 async function buildCartPayload(cart, connection) {
   const items = await cartRepository.findItemsByCartId(cart.id, connection);
 
-  const totalMinor = sumMinor(
-    items.map((item) => calculateSubtotalMinor(item.price, Number(item.quantity))),
-  );
-  const totalQuantity = items.reduce((sum, item) => sum + Number(item.quantity), 0);
+  const grouped = new Map();
+  for (const item of items) {
+    const canteenId = Number(item.canteen_id);
+    if (!grouped.has(canteenId)) grouped.set(canteenId, []);
+    grouped.get(canteenId).push(item);
+  }
 
-  let canteen = null;
-  if (items.length > 0) {
-    canteen = await canteenRepository.findById(items[0].canteen_id, connection);
+  const canteens = [...grouped.entries()].map(([canteenId, groupItems]) => ({
+    canteen: {
+      id: canteenId,
+      name: groupItems[0].canteen_name ?? null,
+      isOpen: Boolean(Number(groupItems[0].canteen_is_open)),
+    },
+    items: groupItems.map(toCartItemResponse),
+    itemCount: groupItems.length,
+    totalQuantity: sumQuantity(groupItems),
+    totalAmount: sumItemsMinor(groupItems) / 100,
+  }));
+
+  let singleCanteen = null;
+  if (canteens.length === 1) {
+    singleCanteen = await canteenRepository.findById(canteens[0].canteen.id, connection);
   }
 
   return {
     id: Number(cart.id),
-    canteen: toCanteenResponse(canteen),
+    // Berisi kantin tunggal bila keranjang hanya memuat satu kantin, dan null
+    // ketika kosong maupun bercampur. Pengelompokan lengkapnya ada di `canteens`.
+    canteen: toCanteenResponse(singleCanteen),
+    canteenCount: canteens.length,
+    canteens,
     items: items.map(toCartItemResponse),
     itemCount: items.length,
-    totalQuantity,
-    totalAmount: totalMinor / 100,
+    totalQuantity: sumQuantity(items),
+    totalAmount: sumItemsMinor(items) / 100,
     // Menandai menu yang berubah menjadi tidak tersedia setelah dimasukkan,
     // agar aplikasi dapat memperingatkan sebelum pesanan dibuat.
     hasUnavailableItem: items.some((item) => !Number(item.is_available)),
@@ -50,11 +76,10 @@ export async function getCart(userId) {
 
 /**
  * Menambahkan menu ke keranjang.
- *
- * Pilihan `replaceCanteen` mewakili konfirmasi ganti kantin: bila bernilai
- * benar, keranjang dikosongkan lebih dulu ketika menu berasal dari kantin lain.
+ * Menu dari kantin mana pun boleh bercampur, dan pemisahannya menjadi beberapa
+ * pesanan dikerjakan pada saat pesanan dibuat.
  */
-export async function addItem(userId, { menuItemId, quantity }, { replaceCanteen = false } = {}) {
+export async function addItem(userId, { menuItemId, quantity, note = null }) {
   return withTransaction(async (connection) => {
     const menu = await menuRepository.findById(menuItemId, connection);
     if (!menu) {
@@ -68,38 +93,16 @@ export async function addItem(userId, { menuItemId, quantity }, { replaceCanteen
     }
 
     const cart = await cartRepository.findOrCreateCartByUserId(userId, connection);
-    const existingCanteenId = await cartRepository.findCartCanteenId(cart.id, connection);
-    const menuCanteenId = Number(menu.canteen_id);
-
-    if (existingCanteenId !== null && existingCanteenId !== menuCanteenId) {
-      if (!replaceCanteen) {
-        const currentCanteen = await canteenRepository.findById(existingCanteenId, connection);
-        throw new BusinessRuleError(
-          `Keranjang berisi menu dari ${currentCanteen?.name ?? 'kantin lain'}. ` +
-            'Kosongkan keranjang terlebih dahulu untuk memesan dari kantin berbeda.',
-          ERROR_CODES.CART_DIFFERENT_CANTEEN,
-          {
-            details: {
-              currentCanteen: toCanteenResponse(currentCanteen),
-              newCanteen: { id: menuCanteenId, name: menu.canteen_name },
-            },
-          },
-        );
-      }
-      await cartRepository.clearCart(cart.id, connection);
-    }
-
-    await cartRepository.addItem({ cartId: cart.id, menuItemId, quantity }, connection);
+    await cartRepository.addItem({ cartId: cart.id, menuItemId, quantity, note }, connection);
     return buildCartPayload(cart, connection);
   });
 }
 
 /**
- * Mengubah jumlah salah satu item keranjang.
- * Pencarian item dibatasi pada keranjang milik pengguna sendiri, sehingga id
- * milik pengguna lain akan dianggap tidak ditemukan.
+ * Mengubah jumlah maupun catatan salah satu item keranjang.
+ * Pencarian dibatasi pada keranjang milik pengguna sendiri.
  */
-export async function updateItemQuantity(userId, cartItemId, quantity) {
+export async function updateItem(userId, cartItemId, { quantity, note }) {
   return withTransaction(async (connection) => {
     const cart = await cartRepository.findOrCreateCartByUserId(userId, connection);
     const item = await cartRepository.findItemByIdAndCart(cartItemId, cart.id, connection);
@@ -123,7 +126,7 @@ export async function updateItemQuantity(userId, cartItemId, quantity) {
       );
     }
 
-    await cartRepository.updateItemQuantity(item.id, quantity, connection);
+    await cartRepository.updateItem(item.id, { quantity, note }, connection);
     return buildCartPayload(cart, connection);
   });
 }

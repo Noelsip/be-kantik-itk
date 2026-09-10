@@ -1,27 +1,6 @@
 -- Skema awal database Kantin ITK untuk MySQL 8.0 ke atas.
---
--- Disusun dari berkas db.sql dan ERD milik proyek ini, dengan beberapa
--- penyesuaian yang dicatat pada README bagian "Keputusan Skema Database":
---
---   Tipe ENUM PostgreSQL diubah menjadi kolom ENUM bawaan MySQL, dan kolom
---   identitas memakai BIGINT UNSIGNED AUTO_INCREMENT.
---
---   Kolom `users.password` dihapus karena proses masuk sepenuhnya melalui
---   Google, sehingga tidak ada kata sandi yang disimpan. Sebagai gantinya
---   `users.google_id` menyimpan identitas akun Google.
---
---   Kolom `users.token_version` ditambahkan agar proses keluar dapat
---   membatalkan kunci akses yang sudah diterbitkan.
---
---   Kolom `canteens.is_open` ditambahkan untuk menyimpan status buka atau tutup.
---
---   Kolom `orders.reject_reason` ditambahkan untuk menyimpan alasan penolakan.
---
---   Kolom `menu_items.deleted_at` ditambahkan agar menu dihapus dengan
---   penandaan, sehingga riwayat pesanan yang merujuknya tetap utuh.
---
---   Indeks dan perilaku penghapusan antar tabel disusun untuk melindungi
---   riwayat pesanan.
+-- Disusun dari db.sql dan ERD proyek ini. Rincian penyesuaiannya tercatat pada
+-- README bagian "Keputusan Skema Database".
 
 CREATE TABLE IF NOT EXISTS `users` (
   `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

@@ -1,3 +1,4 @@
+import { mkdirSync } from 'node:fs';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -11,13 +12,12 @@ import notFound from './middlewares/notFound.js';
 import errorHandler from './middlewares/errorHandler.js';
 import { globalLimiter } from './middlewares/rateLimiters.js';
 import { openapiDocument } from './docs/openapi.js';
+import { UPLOAD_DIR, UPLOAD_URL_PATH } from './config/uploads.js';
 import logger from './utils/logger.js';
 
 /**
  * Penyusun aplikasi Express.
- *
- * Dipisahkan dari berkas server agar pengujian dapat memakai aplikasi ini tanpa
- * menempati porta.
+ * Dipisahkan dari berkas server agar pengujian dapat memakainya tanpa porta.
  */
 export function createApp() {
   const app = express();
@@ -66,12 +66,27 @@ export function createApp() {
     );
   }
 
+  // Direktori unggahan disiapkan saat aplikasi disusun, agar berkas pertama yang
+  // masuk tidak gagal hanya karena direktorinya belum ada.
+  mkdirSync(UPLOAD_DIR, { recursive: true });
+
+  // Berkas unggahan disajikan apa adanya tanpa kemampuan menjalankan apa pun.
+  app.use(
+    UPLOAD_URL_PATH,
+    express.static(UPLOAD_DIR, {
+      index: false,
+      dotfiles: 'deny',
+      maxAge: '7d',
+      setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+    }),
+  );
+
   app.use('/api', globalLimiter);
 
   // Dokumentasi API disajikan dengan Scalar, membaca berkas OpenAPI di bawah.
   app.get('/openapi.json', (_req, res) => res.json(openapiDocument));
   app.use(
-    '/docs',
+    '/docs-api',
     apiReference({
       url: '/openapi.json',
       theme: 'purple',
@@ -85,7 +100,7 @@ export function createApp() {
     res.json({
       success: true,
       message: 'Kantin ITK API',
-      data: { version: '1.0.0', docs: '/docs', health: '/api/health' },
+      data: { version: '1.0.0', docs: '/docs-api', health: '/api/health' },
     }),
   );
 

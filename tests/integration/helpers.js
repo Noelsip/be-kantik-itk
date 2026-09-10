@@ -4,13 +4,8 @@ import path from 'node:path';
 
 /**
  * Perlengkapan pengujian terpadu.
- *
- * Pengujian ini berjalan di atas database MySQL sungguhan yang terpisah dari
- * data pengembangan. Database bernama TEST_DB_NAME dihapus lalu dibangun ulang
- * dari berkas migrasi sebelum tiap berkas pengujian, sehingga hasilnya konsisten.
- *
- * Nilai environment disiapkan sebelum modul konfigurasi diimpor, karena
- * konfigurasi dibekukan saat modul pertama kali dimuat.
+ * Database TEST_DB_NAME dibangun ulang dari berkas migrasi sebelum tiap berkas
+ * uji. Nilai environment disiapkan sebelum modul konfigurasi diimpor.
  */
 
 const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -26,6 +21,9 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-yang-cukup-panja
 process.env.ENABLE_DEV_LOGIN = 'true';
 process.env.ALLOWED_EMAIL_DOMAINS = 'student.itk.ac.id,lecture.itk.ac.id,itk.ac.id';
 process.env.SELLER_EMAILS = 'penjual.a@itk.ac.id,penjual.b@itk.ac.id';
+// Pengiriman push dimatikan agar pengujian tidak menghubungi Firebase sungguhan,
+// sekaligus memastikan riwayat notifikasi tetap tersimpan tanpa kredensial.
+process.env.FIREBASE_SERVICE_ACCOUNT = '';
 
 /** Membangun ulang skema database pengujian dari awal. */
 export function resetSchema() {
@@ -125,12 +123,15 @@ export async function startTestServer() {
   async function request(method, endpoint, { token, body } = {}) {
     const headers = {};
     if (token) headers.Authorization = `Bearer ${token}`;
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
+
+    // FormData dikirim apa adanya agar batas multipart disusun oleh fetch.
+    const isForm = body instanceof FormData;
+    if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
 
     const response = await fetch(`${baseUrl}${endpoint}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     });
 
     const text = await response.text();

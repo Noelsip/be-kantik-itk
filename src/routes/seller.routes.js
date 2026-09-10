@@ -17,10 +17,8 @@ import * as sellerController from '../controllers/seller.controller.js';
 
 /**
  * Kumpulan jalur untuk penjual.
- *
- * Satu penjagaan peran menutupi seluruh cabang ini, sehingga kunci akses milik
- * pembeli tidak dapat menjangkaunya. Kepemilikan tiap data diperiksa kembali di
- * lapisan layanan melalui pembatasan pada kueri.
+ * Satu penjagaan peran menutupi seluruh cabang ini, dan kepemilikan tiap data
+ * diperiksa kembali pada lapisan layanan.
  */
 const router = Router();
 

@@ -4,10 +4,8 @@ import logger from '../utils/logger.js';
 
 /**
  * Kumpulan koneksi MySQL.
- *
- * Seluruh kueri di proyek ini dijalankan lewat prepared statement dengan
- * parameter terikat, tidak pernah dengan penyambungan teks. Itulah lapisan
- * utama yang menjaga aplikasi dari penyisipan SQL.
+ * Seluruh kueri memakai prepared statement dengan parameter terikat, bukan
+ * penyambungan teks, sebagai penjaga utama dari penyisipan SQL.
  */
 
 const baseOptions = {
@@ -56,9 +54,7 @@ export async function execute(sql, params = [], connection) {
 
 /**
  * Menjalankan sekumpulan operasi di dalam satu transaksi.
- *
- * Transaksi disimpan bila callback selesai dan dibatalkan bila terjadi
- * kesalahan, sehingga pesanan yang tersimpan separuh jalan tidak pernah ada.
+ * Disimpan bila callback selesai, dibatalkan bila terjadi kesalahan.
  */
 export async function withTransaction(callback) {
   const connection = await pool.getConnection();

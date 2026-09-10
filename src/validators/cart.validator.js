@@ -1,29 +1,25 @@
 import { z } from 'zod';
-import { idSchema, quantitySchema } from './common.js';
+import { idSchema, quantitySchema, itemNoteSchema } from './common.js';
 
 /**
  * Aturan pemeriksaan untuk keranjang.
- *
- * Tidak ada field harga, subtotal, maupun total di sini. Seluruh nilai tersebut
- * dihitung dari data di database saat pesanan dibuat.
+ * Tidak ada field harga maupun total; seluruhnya dihitung dari data database.
  */
 
 export const addCartItemSchema = z
   .object({
     menuItemId: idSchema,
     quantity: quantitySchema.default(1),
-    /**
-     * Penanda persetujuan ganti kantin. Aplikasi mengirim ulang permintaan yang
-     * sama dengan nilai benar setelah pengguna setuju mengosongkan keranjang.
-     */
-    replaceCanteen: z.boolean().default(false),
+    note: itemNoteSchema,
   })
   .strict('Terdapat data yang tidak dikenali');
 
 export const updateCartItemSchema = z
   .object({
-    quantity: quantitySchema,
+    quantity: quantitySchema.optional(),
+    note: itemNoteSchema,
   })
-  .strict('Terdapat data yang tidak dikenali');
+  .strict('Terdapat data yang tidak dikenali')
+  .refine((value) => Object.keys(value).length > 0, 'Tidak ada data yang diubah');
 
 export const cartItemParamSchema = z.object({ id: idSchema });

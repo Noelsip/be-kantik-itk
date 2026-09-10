@@ -8,15 +8,15 @@ import { toMenuResponse, toOwnedCanteenResponse, toSellerOrderResponse } from '.
 import * as canteenRepository from '../repositories/canteen.repository.js';
 import * as menuRepository from '../repositories/menu.repository.js';
 import * as orderRepository from '../repositories/order.repository.js';
+import * as notificationService from './notification.service.js';
+import { NOTIFICATION_TYPES, buildBuyerStatusMessage } from '../constants/notificationTypes.js';
 import * as categoryRepository from '../repositories/category.repository.js';
 import { groupItemsByOrder } from './order.service.js';
 
 /**
  * Fungsi untuk menangani kebutuhan penjual.
- *
- * Setiap fungsi menerima id penjual yang sedang masuk dan meneruskannya ke
- * klausa WHERE, sehingga penjual yang menebak id milik orang lain hanya akan
- * menerima jawaban tidak ditemukan.
+ * Id penjual yang sedang masuk selalu diteruskan ke klausa WHERE, sehingga data
+ * milik penjual lain terbaca sebagai tidak ditemukan.
  */
 
 /** Mengambil kantin milik penjual, atau menolak bila penjual belum memilikinya. */
@@ -39,9 +39,7 @@ export async function getOwnCanteen(ownerId) {
 
 /**
  * Membuat kantin milik penjual sendiri.
- *
- * Sistem tidak memiliki peran admin yang dapat membuatkan kantin, sehingga
- * penjual menyiapkannya sendiri, dibatasi satu kantin per penjual.
+ * Sistem tidak memiliki peran admin, dan tiap penjual dibatasi satu kantin.
  */
 export async function createOwnCanteen(ownerId, input) {
   return withTransaction(async (connection) => {
@@ -139,9 +137,7 @@ export async function updateMenuItem(ownerId, menuId, input) {
 
 /**
  * Menghapus menu milik kantin penjual.
- *
- * Penghapusan dilakukan dengan penandaan, sehingga riwayat pesanan tetap dapat
- * dibaca sementara menu hilang dari seluruh daftar dan keranjang.
+ * Penghapusan memakai penandaan agar riwayat pesanan tetap terbaca.
  */
 export async function deleteMenuItem(ownerId, menuId) {
   return withTransaction(async (connection) => {
@@ -192,12 +188,11 @@ export async function getIncomingOrder(ownerId, orderId) {
 }
 
 /**
- * Mengubah status pesanan sebagai satu-satunya jalur bagi seluruh tindakan
- * penjual, sehingga keputusan boleh atau tidaknya perpindahan hanya berasal
- * dari satu aturan.
+ * Mengubah status pesanan sebagai satu-satunya jalur tindakan penjual,
+ * sehingga keputusan perpindahan hanya berasal dari satu aturan.
  */
 export async function transitionOrderStatus(ownerId, orderId, nextStatus, options = {}) {
-  return withTransaction(async (connection) => {
+  const { hasil, pemberitahuan } = await withTransaction(async (connection) => {
     // Pencarian dibatasi pemilik sekaligus mengunci baris, sehingga dua penjual
     // tidak dapat mengubah pesanan yang sama secara bersamaan.
     const order = await orderRepository.findForStatusUpdate(orderId, { ownerId }, connection);
@@ -218,8 +213,24 @@ export async function transitionOrderStatus(ownerId, orderId, nextStatus, option
 
     const updated = await orderRepository.updateStatus(orderId, nextStatus, updateOptions, connection);
     const items = await orderRepository.findItemsByOrderId(orderId, connection);
-    return toSellerOrderResponse(updated, items);
+
+    return {
+      hasil: toSellerOrderResponse(updated, items),
+      pemberitahuan: { order: updated, rejectReason: updateOptions.rejectReason ?? null },
+    };
   });
+
+  // Pembeli diberi tahu sesudah perubahan status benar-benar tersimpan.
+  const { order, rejectReason } = pemberitahuan;
+  await notificationService.notify({
+    userId: Number(order.user_id),
+    type: NOTIFICATION_TYPES.ORDER_STATUS_CHANGED,
+    orderId: Number(order.id),
+    data: { status: order.status },
+    ...buildBuyerStatusMessage(order, { rejectReason }),
+  });
+
+  return hasil;
 }
 
 /** Menyusun ringkasan dasbor penjual beserta pesanan terbaru. */

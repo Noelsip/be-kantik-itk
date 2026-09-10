@@ -4,10 +4,8 @@ export const MAX_LIMIT = 100;
 
 /**
  * Perapian nilai halaman dan batas data menjadi bilangan bulat yang aman.
- *
- * MySQL tidak menerima parameter terikat pada klausa LIMIT dan OFFSET, sehingga
- * kedua angka inilah satu-satunya nilai yang disisipkan langsung ke teks SQL.
- * Pembulatan dan pembatasan di sini yang menjaga penyisipan tersebut tetap aman.
+ * MySQL tidak menerima parameter terikat pada LIMIT dan OFFSET, sehingga
+ * pembulatan di sini yang menjaga penyisipannya tetap aman.
  */
 export function resolvePagination({ page = DEFAULT_PAGE, limit = DEFAULT_LIMIT } = {}) {
   const safePage = Math.max(1, Math.trunc(Number(page)) || DEFAULT_PAGE);

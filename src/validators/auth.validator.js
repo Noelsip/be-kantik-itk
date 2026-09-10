@@ -2,10 +2,8 @@ import { z } from 'zod';
 
 /**
  * Aturan pemeriksaan untuk proses masuk.
- *
- * Bentuk yang ketat penting di sini: aplikasi tidak dapat menyisipkan `role`,
- * `email`, atau `userId` ke badan permintaan masuk, karena seluruh identitas
- * hanya berasal dari hasil pemeriksaan identitas Google.
+ * Bentuk yang ketat menutup penyisipan `role`, `email`, atau `userId`, karena
+ * identitas hanya berasal dari hasil pemeriksaan Google.
  */
 export const googleLoginSchema = z
   .object({

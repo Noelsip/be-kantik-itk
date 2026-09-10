@@ -5,9 +5,7 @@ import * as sellerService from '../services/seller.service.js';
 
 /**
  * Fungsi untuk menangani permintaan dari penjual.
- *
- * Nilai `req.user.id` selalu menjadi penanda kepemilikan yang diteruskan ke
- * lapisan layanan; tidak ada handler yang membaca id kantin dari permintaan.
+ * Kepemilikan selalu bersumber dari `req.user.id`, bukan dari isi permintaan.
  */
 
 /** Menangani permintaan ringkasan dasbor. */
@@ -92,16 +90,24 @@ function statusAction(nextStatus, message, buildOptions) {
   });
 }
 
-/** Menangani penerimaan pesanan. */
-export const acceptOrder = statusAction(ORDER_STATUS.DITERIMA, 'Pesanan diterima');
+/**
+ * Menangani penerimaan pesanan.
+ * Status langsung berpindah ke `diproses`, sehingga pembeli melihat pesanannya
+ * sedang disiapkan tanpa menunggu tindakan penjual berikutnya.
+ */
+export const acceptOrder = statusAction(ORDER_STATUS.DIPROSES, 'Pesanan diterima dan sedang disiapkan');
 
 /** Menangani penolakan pesanan beserta alasannya. */
 export const rejectOrder = statusAction(ORDER_STATUS.DITOLAK, 'Pesanan ditolak', (req) => ({
   rejectReason: req.body?.reason ?? null,
 }));
 
-/** Menangani pemrosesan pesanan. */
-export const processOrder = statusAction(ORDER_STATUS.DIPROSES, 'Pesanan sedang diproses');
+/**
+ * Menangani pemrosesan pesanan.
+ * Hanya berlaku bagi pesanan lama yang masih berstatus `diterima`, karena alur
+ * baru sudah berpindah ke `diproses` sejak pesanan diterima.
+ */
+export const processOrder = statusAction(ORDER_STATUS.DIPROSES, 'Pesanan sedang disiapkan');
 
 /** Menangani penandaan pesanan siap diambil. */
 export const readyOrder = statusAction(ORDER_STATUS.SIAP_DIAMBIL, 'Pesanan siap diambil');

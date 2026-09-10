@@ -3,9 +3,7 @@ import { resolvePagination } from '../utils/pagination.js';
 
 /**
  * Fungsi untuk mengakses data tabel `menu_items`.
- *
- * Menu dihapus secara halus melalui kolom `deleted_at`, sehingga setiap
- * pembacaan menyaring baris yang sudah ditandai terhapus.
+ * Menu dihapus dengan penandaan `deleted_at`, dan setiap pembacaan menyaringnya.
  */
 
 const SELECT_COLUMNS = `
@@ -22,11 +20,33 @@ const FROM_CLAUSE = `
   LEFT JOIN categories cat ON cat.id = m.category_id
 `;
 
+/**
+ * Menyusun kolom penanda favorit bagi pembeli yang sedang melihat.
+ * Tanpa id pembeli, kolom tersebut sengaja tidak disertakan sama sekali.
+ */
+function favoriteColumn(viewerId) {
+  return viewerId === undefined
+    ? ''
+    : ', EXISTS(SELECT 1 FROM favorites f WHERE f.menu_item_id = m.id AND f.user_id = ?) AS is_favorite';
+}
+
 /** Mengambil satu menu yang masih aktif berdasarkan id. */
 export async function findById(id, connection) {
   return queryOne(
     `SELECT ${SELECT_COLUMNS} ${FROM_CLAUSE} WHERE m.id = ? AND m.deleted_at IS NULL LIMIT 1`,
     [id],
+    connection,
+  );
+}
+
+/** Mengambil satu menu aktif beserta penanda favorit milik pembeli yang melihat. */
+export async function findByIdForViewer(id, viewerId, connection) {
+  const params = viewerId === undefined ? [id] : [viewerId, id];
+  return queryOne(
+    `SELECT ${SELECT_COLUMNS}${favoriteColumn(viewerId)} ${FROM_CLAUSE}
+      WHERE m.id = ? AND m.deleted_at IS NULL
+      LIMIT 1`,
+    params,
     connection,
   );
 }
@@ -58,8 +78,25 @@ export async function findByIdAndOwner(id, ownerId, connection) {
 }
 
 /** Mengambil daftar menu dengan pencarian, penyaringan, dan pembagian halaman. */
+// Kolom pengurutan dipetakan dari nilai yang sudah dibatasi skema, sehingga
+// tidak ada teks dari pengguna yang masuk ke perintah SQL.
+const MENU_SORT_COLUMNS = Object.freeze({
+  name: 'm.name',
+  price: 'm.price',
+  createdAt: 'm.created_at',
+});
+
 export async function findAll(filters = {}, connection) {
-  const { search, categoryId, canteenId, isAvailable, includeDeleted = false } = filters;
+  const {
+    search,
+    categoryId,
+    canteenId,
+    isAvailable,
+    includeDeleted = false,
+    viewerId,
+    sortBy,
+    sortOrder = 'asc',
+  } = filters;
   const pagination = resolvePagination(filters);
 
   const conditions = [];
@@ -92,11 +129,21 @@ export async function findAll(filters = {}, connection) {
     connection,
   );
 
+  // Menu yang tersedia tetap didahulukan, lalu menyusul urutan pilihan pengguna.
+  const column = MENU_SORT_COLUMNS[sortBy];
+  const direction = sortOrder === 'desc' ? 'DESC' : 'ASC';
+  const orderBy = column
+    ? `m.is_available DESC, ${column} ${direction}, m.id ASC`
+    : 'm.is_available DESC, m.name ASC';
+
+  // Penanda favorit berada pada klausa SELECT, sehingga parameternya mendahului
+  // parameter penyaringan.
+  const rowParams = viewerId === undefined ? params : [viewerId, ...params];
   const rows = await query(
-    `SELECT ${SELECT_COLUMNS} ${FROM_CLAUSE} ${where}
-      ORDER BY m.is_available DESC, m.name ASC
+    `SELECT ${SELECT_COLUMNS}${favoriteColumn(viewerId)} ${FROM_CLAUSE} ${where}
+      ORDER BY ${orderBy}
       LIMIT ${pagination.limit} OFFSET ${pagination.offset}`,
-    params,
+    rowParams,
     connection,
   );
 
@@ -151,9 +198,7 @@ export async function update(id, changes, connection) {
 
 /**
  * Menandai menu sebagai terhapus tanpa membuang barisnya.
- *
- * Penghapusan permanen akan merusak riwayat pesanan yang merujuk menu tersebut,
- * sehingga penandaan inilah yang dipakai.
+ * Penghapusan permanen akan merusak riwayat pesanan yang merujuknya.
  */
 export async function softDelete(id, connection) {
   const result = await execute(
@@ -162,6 +207,19 @@ export async function softDelete(id, connection) {
     connection,
   );
   return result.affectedRows > 0;
+}
+
+/** Menghitung jumlah menu aktif milik kantin seorang penjual. */
+export async function countActiveByOwner(ownerId, connection) {
+  const row = await queryOne(
+    `SELECT COUNT(*) AS total
+       FROM menu_items m
+       JOIN canteens c ON c.id = m.canteen_id
+      WHERE c.owner_id = ? AND m.deleted_at IS NULL`,
+    [ownerId],
+    connection,
+  );
+  return Number(row?.total ?? 0);
 }
 
 /** Mengeluarkan menu dari seluruh keranjang yang masih memuatnya. */

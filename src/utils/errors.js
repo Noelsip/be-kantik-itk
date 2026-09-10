@@ -2,10 +2,8 @@ import ERROR_CODES from '../constants/errorCodes.js';
 
 /**
  * Kelas dasar untuk seluruh kesalahan yang dilempar secara sengaja.
- *
- * Penanda `isOperational` membedakan kesalahan yang memang bagian dari alur
- * bisnis dari kesalahan tak terduga. Hanya yang pertama yang pesannya
- * diteruskan apa adanya ke klien.
+ * Penanda `isOperational` membedakan kesalahan alur bisnis dari yang tak
+ * terduga; hanya yang pertama pesannya diteruskan ke klien.
  */
 export class AppError extends Error {
   constructor(message, { statusCode = 500, code = ERROR_CODES.INTERNAL_ERROR, details } = {}) {

@@ -4,7 +4,7 @@ import { resolvePagination } from '../utils/pagination.js';
 /** Fungsi untuk mengakses data tabel `canteens`. */
 
 const SELECT_COLUMNS = `
-  c.id, c.owner_id, c.name, c.description, c.location, c.image_url,
+  c.id, c.owner_id, c.name, c.description, c.location, c.image_url, c.whatsapp,
   c.is_open, c.created_at, c.updated_at
 `;
 
@@ -32,7 +32,15 @@ export async function findByOwnerId(ownerId, connection) {
 }
 
 /** Mengambil daftar kantin dengan pencarian, penyaringan, dan pembagian halaman. */
-export async function findAll({ search, isOpen, page, limit }, connection) {
+// Kolom pengurutan dipetakan dari nilai yang sudah dibatasi skema, sehingga
+// tidak ada teks dari pengguna yang masuk ke perintah SQL.
+const CANTEEN_SORT_COLUMNS = Object.freeze({
+  name: 'c.name',
+  menuCount: 'menu_count',
+  createdAt: 'c.created_at',
+});
+
+export async function findAll({ search, isOpen, page, limit, sortBy, sortOrder = 'asc' }, connection) {
   const pagination = resolvePagination({ page, limit });
 
   const conditions = [];
@@ -56,6 +64,11 @@ export async function findAll({ search, isOpen, page, limit }, connection) {
     connection,
   );
 
+  // Kantin yang buka tetap didahulukan, lalu menyusul urutan pilihan pengguna.
+  const column = CANTEEN_SORT_COLUMNS[sortBy];
+  const direction = sortOrder === 'desc' ? 'DESC' : 'ASC';
+  const orderBy = column ? `c.is_open DESC, ${column} ${direction}, c.id ASC` : 'c.is_open DESC, c.name ASC';
+
   // Nilai limit dan offset berasal dari resolvePagination, bukan langsung dari pengguna.
   const rows = await query(
     `SELECT ${SELECT_COLUMNS},
@@ -63,7 +76,7 @@ export async function findAll({ search, isOpen, page, limit }, connection) {
               WHERE m.canteen_id = c.id AND m.deleted_at IS NULL) AS menu_count
        FROM canteens c
        ${where}
-       ORDER BY c.is_open DESC, c.name ASC
+       ORDER BY ${orderBy}
        LIMIT ${pagination.limit} OFFSET ${pagination.offset}`,
     params,
     connection,
@@ -74,13 +87,21 @@ export async function findAll({ search, isOpen, page, limit }, connection) {
 
 /** Membuat kantin baru untuk seorang penjual. */
 export async function create(
-  { ownerId, name, description = null, location = null, imageUrl = null, isOpen = true },
+  {
+    ownerId,
+    name,
+    description = null,
+    location = null,
+    imageUrl = null,
+    whatsapp = null,
+    isOpen = true,
+  },
   connection,
 ) {
   const result = await execute(
-    `INSERT INTO canteens (owner_id, name, description, location, image_url, is_open)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [ownerId, name, description, location, imageUrl, isOpen ? 1 : 0],
+    `INSERT INTO canteens (owner_id, name, description, location, image_url, whatsapp, is_open)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [ownerId, name, description, location, imageUrl, whatsapp, isOpen ? 1 : 0],
     connection,
   );
   return findById(result.insertId, connection);
@@ -93,6 +114,7 @@ export async function update(id, changes, connection) {
     description: 'description',
     location: 'location',
     imageUrl: 'image_url',
+    whatsapp: 'whatsapp',
     isOpen: 'is_open',
   };
 

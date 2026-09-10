@@ -2,13 +2,12 @@ import { query, queryOne, execute } from '../config/database.js';
 
 /**
  * Fungsi untuk mengakses data tabel `users`.
- *
- * Tidak ada kolom kata sandi karena proses masuk sepenuhnya melalui Google,
- * sehingga tidak ada rahasia pengguna yang disimpan.
+ * Tidak ada kolom kata sandi karena proses masuk sepenuhnya melalui Google.
  */
 
 const SELECT_COLUMNS = `
-  id, google_id, campus_id, name, email, role, profile_image,
+  id, google_id, campus_id, nim, name, email, role, profile_image, whatsapp,
+  affiliation, faculty, study_program, study_program_code,
   token_version, created_at, updated_at
 `;
 
@@ -43,13 +42,41 @@ export async function campusIdExists(campusId, connection) {
 
 /** Membuat baris pengguna baru. */
 export async function create(
-  { googleId = null, campusId, name, email, role, profileImage = null },
+  {
+    googleId = null,
+    campusId,
+    name,
+    email,
+    role,
+    profileImage = null,
+    whatsapp = null,
+    nim = null,
+    affiliation = null,
+    faculty = null,
+    studyProgram = null,
+    studyProgramCode = null,
+  },
   connection,
 ) {
   const result = await execute(
-    `INSERT INTO users (google_id, campus_id, name, email, role, profile_image)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [googleId, campusId, name, String(email).toLowerCase(), role, profileImage],
+    `INSERT INTO users
+       (google_id, campus_id, name, email, role, profile_image, whatsapp,
+        nim, affiliation, faculty, study_program, study_program_code)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      googleId,
+      campusId,
+      name,
+      String(email).toLowerCase(),
+      role,
+      profileImage,
+      whatsapp,
+      nim,
+      affiliation,
+      faculty,
+      studyProgram,
+      studyProgramCode,
+    ],
     connection,
   );
   return findById(result.insertId, connection);
@@ -57,11 +84,9 @@ export async function create(
 
 /**
  * Memperbarui data profil yang boleh diubah pengguna sendiri.
- *
- * Kolom `email`, `role`, `campus_id`, dan `google_id` sengaja tidak diterima di
- * sini karena merupakan identitas dan penentu hak akses.
+ * Kolom `email`, `role`, `campus_id`, dan `google_id` tidak diterima di sini.
  */
-export async function updateProfile(id, { name, profileImage }, connection) {
+export async function updateProfile(id, { name, profileImage, whatsapp }, connection) {
   const fields = [];
   const params = [];
 
@@ -73,6 +98,10 @@ export async function updateProfile(id, { name, profileImage }, connection) {
     fields.push('profile_image = ?');
     params.push(profileImage);
   }
+  if (whatsapp !== undefined) {
+    fields.push('whatsapp = ?');
+    params.push(whatsapp);
+  }
 
   if (fields.length === 0) return findById(id, connection);
 
@@ -83,11 +112,29 @@ export async function updateProfile(id, { name, profileImage }, connection) {
 
 /**
  * Memperbarui peran pengguna.
- * Hanya dipanggil dari daftar penjual di konfigurasi server, tidak pernah dari
- * permintaan klien.
+ * Hanya dipanggil dari daftar penjual di konfigurasi server.
  */
 export async function updateRole(id, role, connection) {
   await execute('UPDATE users SET role = ? WHERE id = ?', [role, id], connection);
+  return findById(id, connection);
+}
+
+/**
+ * Memperbarui data akademik pengguna.
+ * Nilainya diturunkan dari NIM pada alamat email, bukan dari permintaan klien.
+ */
+export async function updateAcademicProfile(
+  id,
+  { nim = null, affiliation = null, faculty = null, studyProgram = null, studyProgramCode = null },
+  connection,
+) {
+  await execute(
+    `UPDATE users
+        SET nim = ?, affiliation = ?, faculty = ?, study_program = ?, study_program_code = ?
+      WHERE id = ?`,
+    [nim, affiliation, faculty, studyProgram, studyProgramCode, id],
+    connection,
+  );
   return findById(id, connection);
 }
 

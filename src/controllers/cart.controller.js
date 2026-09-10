@@ -12,15 +12,16 @@ export const getCart = asyncHandler(async (req, res) => {
 
 /** Menangani penambahan menu ke keranjang. */
 export const addItem = asyncHandler(async (req, res) => {
-  const { menuItemId, quantity, replaceCanteen } = req.body;
-  const cart = await cartService.addItem(req.user.id, { menuItemId, quantity }, { replaceCanteen });
+  const { menuItemId, quantity, note } = req.body;
+  const cart = await cartService.addItem(req.user.id, { menuItemId, quantity, note });
   return sendCreated(res, { message: 'Menu ditambahkan ke keranjang', data: cart });
 });
 
-/** Menangani perubahan jumlah item keranjang. */
+/** Menangani perubahan jumlah maupun catatan item keranjang. */
 export const updateItem = asyncHandler(async (req, res) => {
-  const cart = await cartService.updateItemQuantity(req.user.id, req.params.id, req.body.quantity);
-  return sendSuccess(res, { message: 'Jumlah menu diperbarui', data: cart });
+  const { quantity, note } = req.body;
+  const cart = await cartService.updateItem(req.user.id, req.params.id, { quantity, note });
+  return sendSuccess(res, { message: 'Item keranjang diperbarui', data: cart });
 });
 
 /** Menangani penghapusan item dari keranjang. */

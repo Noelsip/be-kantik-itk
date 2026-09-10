@@ -6,13 +6,8 @@ import logger from '../utils/logger.js';
 
 /**
  * Fungsi untuk memeriksa identitas Google yang dikirim aplikasi.
- *
- * Aplikasi Flutter menjalankan proses masuk Google, lalu mengirim hasilnya ke
- * sini. Pemeriksaan dilakukan langsung ke kunci publik Google, mencakup tanda
- * tangan, penerbit, masa berlaku, dan kesesuaian dengan aplikasi ini.
- *
- * Seluruh identitas diambil dari hasil pemeriksaan tersebut, bukan dari isi
- * permintaan.
+ * Pemeriksaan dilakukan ke kunci publik Google, mencakup tanda tangan, penerbit,
+ * masa berlaku, dan kesesuaiannya dengan aplikasi ini.
  */
 
 const client = new OAuth2Client();

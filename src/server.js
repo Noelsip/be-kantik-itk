@@ -20,7 +20,7 @@ async function start() {
   const app = createApp();
   const server = app.listen(config.server.port, config.server.host, () => {
     logger.info(`Kantin ITK API berjalan pada http://${config.server.host}:${config.server.port}`);
-    logger.info(`Dokumentasi API tersedia pada http://${config.server.host}:${config.server.port}/docs`);
+    logger.info(`Dokumentasi API tersedia pada http://${config.server.host}:${config.server.port}/docs-api`);
     logger.info(`Mode: ${config.env}`);
 
     if (config.auth.devLoginEnabled) {

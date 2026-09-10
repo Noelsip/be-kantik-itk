@@ -3,10 +3,8 @@ import { z } from 'zod';
 
 /**
  * Konfigurasi environment.
- *
- * Seluruh nilai diperiksa saat aplikasi dinyalakan, sehingga kesalahan
- * konfigurasi langsung terlihat dengan pesan yang jelas, bukan muncul jauh di
- * dalam penanganan permintaan.
+ * Seluruh nilai diperiksa saat aplikasi dinyalakan agar kesalahan konfigurasi
+ * langsung terlihat.
  */
 
 const csv = (value) =>
@@ -53,6 +51,10 @@ const envSchema = z
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10),
     TRUST_PROXY: booleanish.default('false'),
 
+    // Jalur berkas kredensial akun layanan Firebase. Bila kosong, pesan push
+    // tidak dikirim sementara riwayat notifikasi tetap tersimpan.
+    FIREBASE_SERVICE_ACCOUNT: z.string().default(''),
+
     // Jalur masuk cepat untuk pengembangan, selalu mati di lingkungan produksi.
     ENABLE_DEV_LOGIN: booleanish.default('false'),
   })
@@ -94,10 +96,7 @@ const isTest = raw.NODE_ENV === 'test';
 
 /**
  * Penyaring DATABASE_URL agar hanya alamat MySQL yang dipakai.
- *
- * Nilai DATABASE_URL milik proyek lain kerap tersimpan di environment sistem.
- * Alamat dengan skema selain MySQL diabaikan agar aplikasi tidak diam-diam
- * terhubung ke basis data yang keliru.
+ * Nilai milik proyek lain di environment sistem diabaikan.
  */
 function resolveDatabaseUrl(value) {
   if (!value) return null;
@@ -158,6 +157,10 @@ export const config = Object.freeze({
     sellerEmails: Object.freeze(csv(raw.SELLER_EMAILS).map((email) => email.toLowerCase())),
     // Nilai dari berkas .env sekalipun tidak dapat menyalakan jalur ini di produksi.
     devLoginEnabled: raw.ENABLE_DEV_LOGIN && !isProduction,
+  }),
+
+  firebase: Object.freeze({
+    serviceAccountPath: raw.FIREBASE_SERVICE_ACCOUNT || null,
   }),
 
   http: Object.freeze({

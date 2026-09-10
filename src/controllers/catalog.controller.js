@@ -1,5 +1,6 @@
 import asyncHandler from '../utils/asyncHandler.js';
-import { sendSuccess } from '../utils/response.js';
+import { ROLES } from '../constants/roles.js';
+import { sendSuccess, sendCreated } from '../utils/response.js';
 import * as canteenService from '../services/canteen.service.js';
 import * as menuService from '../services/menu.service.js';
 import * as categoryService from '../services/category.service.js';
@@ -8,6 +9,9 @@ import * as categoryService from '../services/category.service.js';
  * Fungsi untuk menangani permintaan katalog kantin, menu, dan kategori.
  * Nilai `req.validatedQuery` berasal dari lapisan pemeriksaan permintaan.
  */
+
+/** Mengambil id pembeli yang sedang melihat, dipakai untuk penanda favorit. */
+const viewerId = (req) => (req.user?.role === ROLES.PEMBELI ? req.user.id : undefined);
 
 /** Menangani permintaan daftar kantin. */
 export const listCanteens = asyncHandler(async (req, res) => {
@@ -23,23 +27,37 @@ export const getCanteen = asyncHandler(async (req, res) => {
 
 /** Menangani permintaan menu milik sebuah kantin. */
 export const getCanteenMenu = asyncHandler(async (req, res) => {
-  const { canteen, menu, meta } = await canteenService.getCanteenMenu(
-    req.params.id,
-    req.validatedQuery,
-  );
+  const { canteen, menu, meta } = await canteenService.getCanteenMenu(req.params.id, {
+    ...req.validatedQuery,
+    viewerId: viewerId(req),
+  });
   return sendSuccess(res, { message: 'Daftar menu kantin', data: { canteen, menu }, meta });
 });
 
 /** Menangani permintaan daftar menu dari seluruh kantin. */
 export const listMenu = asyncHandler(async (req, res) => {
-  const { menu, meta } = await menuService.listMenu(req.validatedQuery);
+  const { menu, meta } = await menuService.listMenu({
+    ...req.validatedQuery,
+    viewerId: viewerId(req),
+  });
   return sendSuccess(res, { message: 'Daftar menu', data: menu, meta });
 });
 
 /** Menangani permintaan detail menu. */
 export const getMenuItem = asyncHandler(async (req, res) => {
-  const menu = await menuService.getMenuItem(req.params.id);
+  const menu = await menuService.getMenuItem(req.params.id, viewerId(req));
   return sendSuccess(res, { message: 'Detail menu', data: menu });
+});
+
+/**
+ * Menangani pembuatan kategori oleh penjual.
+ * Nama yang sudah ada dipakai kembali dan dijawab 200, bukan dianggap bentrok.
+ */
+export const createCategory = asyncHandler(async (req, res) => {
+  const { category, created } = await categoryService.createCategory(req.body);
+  return created
+    ? sendCreated(res, { message: 'Kategori dibuat', data: category })
+    : sendSuccess(res, { message: 'Kategori sudah ada dan dipakai kembali', data: category });
 });
 
 /** Menangani permintaan daftar kategori. */

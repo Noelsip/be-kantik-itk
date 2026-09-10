@@ -1,8 +1,7 @@
 /**
  * Pembungkus respons agar bentuknya seragam di seluruh endpoint.
- *
- * Respons berhasil berisi `success`, `message`, dan `data`.
- * Respons gagal berisi `success`, `message`, dan `error`.
+ * Respons berhasil berisi `success`, `message`, dan `data`; respons gagal
+ * menggantinya dengan `error`.
  */
 
 export function sendSuccess(res, { message = 'Berhasil', data = null, statusCode = 200, meta } = {}) {

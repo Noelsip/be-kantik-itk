@@ -2,10 +2,8 @@ import { ValidationError } from '../utils/errors.js';
 
 /**
  * Pemeriksaan isi permintaan sekaligus penggantian isinya dengan hasil olahan.
- *
- * Penggantian ini disengaja: lapisan berikutnya hanya menerima field yang
- * dideklarasikan skema, sehingga field tambahan seperti `role` atau
- * `total_amount` tidak dapat diselundupkan lewat badan permintaan.
+ * Lapisan berikutnya hanya menerima field yang dideklarasikan skema, sehingga
+ * field tambahan seperti `role` tidak dapat diselundupkan.
  */
 export function validate(schemas) {
   return function validateMiddleware(req, _res, next) {

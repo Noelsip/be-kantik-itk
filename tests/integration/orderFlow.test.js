@@ -35,7 +35,9 @@ async function createOrder(note = null) {
     body: { note },
   });
   assert.equal(status, 201, `checkout gagal: ${JSON.stringify(body)}`);
-  return body.data;
+  // Seluruh isinya berasal dari satu kantin, sehingga menghasilkan satu pesanan.
+  assert.equal(body.data.length, 1);
+  return body.data[0];
 }
 
 test('menolak pembuatan pesanan saat keranjang kosong', async () => {
@@ -132,6 +134,67 @@ test('pesanan gagal dan dibatalkan seluruhnya bila ada menu yang tidak tersedia'
   });
 });
 
+test('keranjang campur dipecah menjadi satu pesanan untuk tiap kantin', async () => {
+  await emptyCart();
+  await addToCart(ctx.fixtures.menu.nasiGoreng, 2);
+  await addToCart(ctx.fixtures.menu.esTeh, 1);
+  await addToCart(ctx.fixtures.menu.mieGorengB, 1);
+
+  const { status, body } = await ctx.request('POST', '/api/orders', {
+    token: ctx.tokens.buyer,
+    body: { note: 'Tanpa sambal' },
+  });
+  assert.equal(status, 201, JSON.stringify(body));
+  assert.equal(body.data.length, 2, 'dua kantin menghasilkan dua pesanan');
+
+  const perKantin = new Map(body.data.map((o) => [o.canteen.id, o]));
+  const pesananA = perKantin.get(ctx.fixtures.canteenA);
+  const pesananB = perKantin.get(ctx.fixtures.canteenB);
+
+  assert.equal(pesananA.totalAmount, 35000, 'dua Nasi Goreng ditambah satu Es Teh');
+  assert.equal(pesananA.items.length, 2);
+  assert.equal(pesananB.totalAmount, 14000, 'satu Mie Goreng');
+  assert.equal(pesananB.items.length, 1);
+
+  // Nomor pesanan tiap kantin berbeda, dan catatan yang sama ikut pada keduanya.
+  assert.notEqual(pesananA.orderNumber, pesananB.orderNumber);
+  assert.equal(pesananA.note, 'Tanpa sambal');
+  assert.equal(pesananB.note, 'Tanpa sambal');
+
+  // Seluruh isi keranjang habis setelah pesanan dibuat.
+  const { body: cart } = await ctx.request('GET', '/api/cart', { token: ctx.tokens.buyer });
+  assert.equal(cart.data.items.length, 0);
+});
+
+test('kantin yang tutup membatalkan seluruh pesanan pada keranjang campur', async () => {
+  await emptyCart();
+  await addToCart(ctx.fixtures.menu.nasiGoreng, 1);
+  await addToCart(ctx.fixtures.menu.mieGorengB, 1);
+
+  // Kantin B ditutup pemiliknya setelah menunya masuk keranjang.
+  await ctx.request('PATCH', '/api/seller/canteen', {
+    token: ctx.tokens.sellerB,
+    body: { isOpen: false },
+  });
+
+  const { status, body } = await ctx.request('POST', '/api/orders', {
+    token: ctx.tokens.buyer,
+    body: {},
+  });
+  assert.equal(status, 422);
+  assert.equal(body.error.code, 'CANTEEN_CLOSED');
+
+  // Tidak ada pesanan yang tersimpan sebagian, dan keranjang tetap utuh.
+  const { body: cart } = await ctx.request('GET', '/api/cart', { token: ctx.tokens.buyer });
+  assert.equal(cart.data.items.length, 2);
+
+  await ctx.request('PATCH', '/api/seller/canteen', {
+    token: ctx.tokens.sellerB,
+    body: { isOpen: true },
+  });
+  await emptyCart();
+});
+
 test('pembeli tidak dapat membaca pesanan pembeli lain', async () => {
   const order = await createOrder();
   const { status, body } = await ctx.request('GET', `/api/orders/${order.id}`, {
@@ -177,9 +240,9 @@ test('pembeli tidak dapat membatalkan pesanan pembeli lain', async () => {
 
 test('alur normal berjalan melewati seluruh status', async () => {
   const order = await createOrder();
+  // Penerimaan pesanan langsung menuju `diproses`, tanpa singgah di `diterima`.
   const steps = [
-    ['accept', 'diterima'],
-    ['process', 'diproses'],
+    ['accept', 'diproses'],
     ['ready', 'siap_diambil'],
     ['complete', 'selesai'],
   ];
@@ -203,10 +266,24 @@ test('penjual tidak dapat melompati tahap status', async () => {
   assert.match(body.message, /MENUNGGU KONFIRMASI/);
 });
 
+test('penerimaan pesanan langsung membuat pembeli melihatnya sedang disiapkan', async () => {
+  const order = await createOrder();
+  const diterima = await ctx.request('PATCH', `/api/seller/orders/${order.id}/accept`, {
+    token: ctx.tokens.sellerA,
+  });
+  assert.equal(diterima.status, 200);
+  assert.equal(diterima.body.data.status, 'diproses');
+
+  // Pembeli membaca pesanannya sendiri dan memperoleh keterangan yang sama.
+  const { body } = await ctx.request('GET', `/api/orders/${order.id}`, { token: ctx.tokens.buyer });
+  assert.equal(body.data.status, 'diproses');
+  assert.equal(body.data.statusLabel, 'Sedang Disiapkan');
+  assert.equal(body.data.isCancellable, false, 'pesanan yang disiapkan tidak dapat dibatalkan');
+});
+
 test('penjual tidak dapat memundurkan status pesanan', async () => {
   const order = await createOrder();
   await ctx.request('PATCH', `/api/seller/orders/${order.id}/accept`, { token: ctx.tokens.sellerA });
-  await ctx.request('PATCH', `/api/seller/orders/${order.id}/process`, { token: ctx.tokens.sellerA });
 
   const { status, body } = await ctx.request('PATCH', `/api/seller/orders/${order.id}/accept`, {
     token: ctx.tokens.sellerA,

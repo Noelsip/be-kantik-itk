@@ -10,9 +10,7 @@ import {
 
 /**
  * Pengujian perhitungan uang.
- *
- * Perhitungan memakai satuan terkecil berupa bilangan bulat justru agar total
- * tidak bergeser, dan pengujian ini menjaga perilaku tersebut.
+ * Perhitungan memakai satuan terkecil agar total tidak bergeser.
  */
 
 test('mengubah teks desimal dari database menjadi satuan terkecil', () => {

@@ -25,3 +25,6 @@ tmp/
 *.swp
 .DS_Store
 Thumbs.db
+uploads/
+secrets/
+!secrets/.gitkeep

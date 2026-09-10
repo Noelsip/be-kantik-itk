@@ -56,7 +56,18 @@ test('kunci akses kedaluwarsa dilaporkan sebagai berakhir', async () => {
 });
 
 test('proses keluar membatalkan kunci akses yang sudah diterbitkan', async () => {
-  const token = await ctx.login('budi@student.itk.ac.id');
+  // Memakai akun tersendiri karena proses keluar membatalkan seluruh kunci akses
+  // milik akun tersebut, termasuk yang dipakai pengujian lain.
+  const { withTransaction } = await import('../../src/config/database.js');
+  const email = 'pembeli.keluar@student.itk.ac.id';
+  await withTransaction(async (connection) => {
+    await connection.execute(
+      'INSERT INTO users (campus_id, name, email, role) VALUES (?, ?, ?, ?)',
+      ['pembeli-keluar', 'Pembeli Keluar', email, 'pembeli'],
+    );
+  });
+
+  const token = await ctx.login(email);
   assert.equal((await ctx.request('GET', '/api/auth/me', { token })).status, 200);
 
   await ctx.request('POST', '/api/auth/logout', { token });
@@ -108,6 +119,70 @@ test('pengguna dapat mengubah nama tampilannya', async () => {
   assert.equal(body.data.name, 'Budi Santoso');
 });
 
+test('profil dapat diubah memakai PUT maupun PATCH', async () => {
+  const put = await ctx.request('PUT', '/api/users/me', {
+    token: ctx.tokens.buyer,
+    body: { name: 'Budi Lewat PUT' },
+  });
+  assert.equal(put.status, 200);
+  assert.equal(put.body.data.name, 'Budi Lewat PUT');
+
+  const patch = await ctx.request('PATCH', '/api/users/me', {
+    token: ctx.tokens.buyer,
+    body: { name: 'Budi Santoso' },
+  });
+  assert.equal(patch.status, 200);
+  assert.equal(patch.body.data.name, 'Budi Santoso');
+
+  // Pembatasan field yang sama juga berlaku pada PUT.
+  const ditolak = await ctx.request('PUT', '/api/users/me', {
+    token: ctx.tokens.buyer,
+    body: { role: 'penjual' },
+  });
+  assert.equal(ditolak.status, 422);
+});
+
+test('pengguna dapat menyimpan nomor WhatsApp dan nomornya dibakukan', async () => {
+  const { status, body } = await ctx.request('PATCH', '/api/users/me', {
+    token: ctx.tokens.buyer,
+    body: { whatsapp: '0812-3456-7890' },
+  });
+  assert.equal(status, 200);
+  assert.equal(body.data.whatsapp, '6281234567890', 'disimpan dalam bentuk baku');
+
+  // Nomor dapat dikosongkan kembali.
+  const dikosongkan = await ctx.request('PATCH', '/api/users/me', {
+    token: ctx.tokens.buyer,
+    body: { whatsapp: null },
+  });
+  assert.equal(dikosongkan.body.data.whatsapp, null);
+});
+
+test('nomor WhatsApp yang tidak valid ditolak', async () => {
+  for (const whatsapp of ['0712345678', 'abcd', '+15550100', '08']) {
+    const { status } = await ctx.request('PATCH', '/api/users/me', {
+      token: ctx.tokens.buyer,
+      body: { whatsapp },
+    });
+    assert.equal(status, 422, `${whatsapp} seharusnya ditolak`);
+  }
+});
+
+test('penjual dapat menyimpan nomor WhatsApp kantinnya', async () => {
+  const { status, body } = await ctx.request('PATCH', '/api/seller/canteen', {
+    token: ctx.tokens.sellerA,
+    body: { whatsapp: '+62 812-1111-2222' },
+  });
+  assert.equal(status, 200);
+  assert.equal(body.data.whatsapp, '6281211112222');
+
+  // Pembeli ikut melihat nomor tersebut pada detail kantin.
+  const dilihatPembeli = await ctx.request('GET', `/api/canteens/${ctx.fixtures.canteenA}`, {
+    token: ctx.tokens.buyer,
+  });
+  assert.equal(dilihatPembeli.body.data.whatsapp, '6281211112222');
+});
+
 test('pengguna tidak dapat menaikkan perannya atau mengubah data identitas', async () => {
   for (const payload of [
     { role: 'penjual' },
@@ -125,6 +200,116 @@ test('pengguna tidak dapat menaikkan perannya atau mengubah data identitas', asy
 
   const { body } = await ctx.request('GET', '/api/users/me', { token: ctx.tokens.buyer });
   assert.equal(body.data.role, 'pembeli', 'role tidak boleh berubah');
+});
+
+test('profil mahasiswa terisi fakultas dan program studi dari NIM', async () => {
+  const { withTransaction } = await import('../../src/config/database.js');
+  const email = '11231099@student.itk.ac.id';
+  await withTransaction(async (connection) => {
+    await connection.execute(
+      'INSERT INTO users (campus_id, name, email, role) VALUES (?, ?, ?, ?)',
+      ['11231099', 'Mahasiswa Informatika', email, 'pembeli'],
+    );
+  });
+
+  const token = await ctx.login(email);
+  const { status, body } = await ctx.request('GET', '/api/users/me', { token });
+  assert.equal(status, 200);
+  assert.equal(body.data.nim, '11231099');
+  assert.equal(body.data.studyProgramCode, '11');
+  assert.equal(body.data.studyProgram, 'Informatika');
+  assert.equal(body.data.faculty, 'Fakultas Sains dan Teknologi Informasi');
+  assert.equal(body.data.affiliation, 'Fakultas Sains dan Teknologi Informasi');
+});
+
+test('profil dosen memakai keterangan Dosen ITK tanpa program studi', async () => {
+  const { withTransaction } = await import('../../src/config/database.js');
+  const email = 'dosen.uji@lecture.itk.ac.id';
+  await withTransaction(async (connection) => {
+    await connection.execute(
+      'INSERT INTO users (campus_id, name, email, role) VALUES (?, ?, ?, ?)',
+      ['dosen-uji', 'Dosen Uji', email, 'pembeli'],
+    );
+  });
+
+  const token = await ctx.login(email);
+  const { body } = await ctx.request('GET', '/api/users/me', { token });
+  assert.equal(body.data.affiliation, 'Dosen ITK');
+  assert.equal(body.data.nim, null, 'dosen tidak memiliki NIM');
+  assert.equal(body.data.studyProgram, null);
+  assert.equal(body.data.faculty, null);
+});
+
+test('penjual dapat menutup lalu membuka kembali kantinnya', async () => {
+  const tutup = await ctx.request('PATCH', '/api/seller/canteen', {
+    token: ctx.tokens.sellerA,
+    body: { isOpen: false },
+  });
+  assert.equal(tutup.status, 200);
+  assert.equal(tutup.body.data.isOpen, false);
+  assert.equal(tutup.body.data.statusLabel, 'Tutup');
+
+  // Pembeli ikut melihat kantin tersebut sebagai tutup.
+  const dilihatPembeli = await ctx.request('GET', `/api/canteens/${ctx.fixtures.canteenA}`, {
+    token: ctx.tokens.buyer,
+  });
+  assert.equal(dilihatPembeli.body.data.isOpen, false);
+
+  const buka = await ctx.request('PATCH', '/api/seller/canteen', {
+    token: ctx.tokens.sellerA,
+    body: { isOpen: true },
+  });
+  assert.equal(buka.body.data.isOpen, true);
+  assert.equal(buka.body.data.statusLabel, 'Buka');
+});
+
+test('penjual tidak dapat mengubah status buka kantin milik penjual lain', async () => {
+  await ctx.request('PATCH', '/api/seller/canteen', {
+    token: ctx.tokens.sellerB,
+    body: { isOpen: false },
+  });
+
+  // Kantin milik penjual A tidak ikut terpengaruh.
+  const { body } = await ctx.request('GET', `/api/canteens/${ctx.fixtures.canteenA}`, {
+    token: ctx.tokens.buyer,
+  });
+  assert.equal(body.data.isOpen, true);
+
+  await ctx.request('PATCH', '/api/seller/canteen', {
+    token: ctx.tokens.sellerB,
+    body: { isOpen: true },
+  });
+});
+
+test('profil alamat umum kampus memakai keterangan Email Umum ITK', async () => {
+  const { withTransaction } = await import('../../src/config/database.js');
+  const email = 'humas.uji@itk.ac.id';
+  await withTransaction(async (connection) => {
+    await connection.execute(
+      'INSERT INTO users (campus_id, name, email, role) VALUES (?, ?, ?, ?)',
+      ['humas-uji', 'Humas Uji', email, 'pembeli'],
+    );
+  });
+
+  const token = await ctx.login(email);
+  const { body } = await ctx.request('GET', '/api/users/me', { token });
+  assert.equal(body.data.affiliation, 'Email Umum ITK');
+  assert.equal(body.data.studyProgram, null);
+});
+
+test('pengguna tidak dapat mengisi sendiri fakultas maupun program studi', async () => {
+  for (const payload of [
+    { faculty: 'Fakultas Karangan' },
+    { studyProgram: 'Prodi Karangan' },
+    { studyProgramCode: '99' },
+    { affiliation: 'Rektor ITK' },
+  ]) {
+    const { status } = await ctx.request('PATCH', '/api/users/me', {
+      token: ctx.tokens.buyer,
+      body: payload,
+    });
+    assert.equal(status, 422, `payload ${JSON.stringify(payload)} seharusnya ditolak`);
+  }
 });
 
 test('daftar kantin disertai informasi halaman', async () => {
@@ -242,7 +427,7 @@ test('penghapusan menu memakai penandaan sehingga riwayat pesanan tetap utuh', a
     token: ctx.tokens.buyer,
     body: {},
   });
-  const orderId = order.data.id;
+  const orderId = order.data[0].id;
 
   const deleted = await ctx.request('DELETE', `/api/seller/menu/${menuId}`, {
     token: ctx.tokens.sellerA,

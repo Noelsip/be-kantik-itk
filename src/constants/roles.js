@@ -1,8 +1,6 @@
 /**
  * Peran pengguna dalam sistem, hanya ada dua.
- *
- * Peran selalu dibaca dari baris pengguna di database, bukan dari isi permintaan
- * maupun klaim di dalam token.
+ * Peran selalu dibaca dari baris pengguna di database, bukan dari permintaan.
  */
 export const ROLES = Object.freeze({
   PEMBELI: 'pembeli',

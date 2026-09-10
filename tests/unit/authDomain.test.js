@@ -3,9 +3,7 @@ import assert from 'node:assert/strict';
 
 /**
  * Pengujian aturan domain email dan penetapan peran.
- *
- * Nilai environment disiapkan sebelum modul diimpor, karena konfigurasi dibekukan
- * pada saat modul pertama kali dimuat.
+ * Nilai environment disiapkan sebelum modul diimpor karena konfigurasi dibekukan.
  */
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret-yang-cukup-panjang-untuk-validasi-zod';

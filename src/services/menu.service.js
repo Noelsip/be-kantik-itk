@@ -6,9 +6,7 @@ import * as menuRepository from '../repositories/menu.repository.js';
 
 /**
  * Fungsi untuk menyajikan menu kepada pembeli.
- *
- * Pencarian dan penyaringan dikerjakan pada kueri database, sehingga aplikasi
- * tidak perlu mengunduh seluruh menu lalu menyaringnya sendiri.
+ * Pencarian dan penyaringan dikerjakan pada kueri database.
  */
 
 /** Mengambil daftar menu sesuai pencarian dan penyaringan. */
@@ -21,8 +19,8 @@ export async function listMenu(filters = {}) {
 }
 
 /** Mengambil detail satu menu. */
-export async function getMenuItem(menuId) {
-  const menu = await menuRepository.findById(menuId);
+export async function getMenuItem(menuId, viewerId) {
+  const menu = await menuRepository.findByIdForViewer(menuId, viewerId);
   if (!menu) {
     throw new NotFoundError('Menu tidak ditemukan', ERROR_CODES.MENU_NOT_FOUND);
   }

@@ -1,11 +1,7 @@
 /**
  * Perhitungan uang.
- *
- * Harga tersimpan sebagai DECIMAL(12,2) dan diterima dari driver dalam bentuk
- * teks. Seluruh perhitungan dilakukan pada satuan terkecil berupa bilangan bulat
- * agar total tidak terpengaruh pembulatan bilangan desimal.
- *
- * Respons API tetap mengirim angka biasa, misalnya 15000.
+ * Harga diterima dari driver sebagai teks dan dihitung pada satuan terkecil
+ * berupa bilangan bulat, agar total tidak terpengaruh pembulatan desimal.
  */
 
 const SCALE = 2;

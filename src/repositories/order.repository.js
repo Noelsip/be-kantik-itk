@@ -3,10 +3,8 @@ import { resolvePagination } from '../utils/pagination.js';
 
 /**
  * Fungsi untuk mengakses data tabel `orders` dan `order_items`.
- *
- * Setiap pembacaan yang dapat dijangkau pembeli maupun penjual selalu menyertakan
- * id pemiliknya pada klausa WHERE, sehingga baris milik orang lain tidak pernah
- * ikut terambil sejak awal.
+ * Setiap pembacaan menyertakan id pemiliknya pada klausa WHERE, sehingga baris
+ * milik orang lain tidak ikut terambil.
  */
 
 const ORDER_COLUMNS = `
@@ -75,7 +73,7 @@ export async function findForStatusUpdate(id, scope, connection) {
 /** Mengambil seluruh baris item dari satu pesanan. */
 export async function findItemsByOrderId(orderId, connection) {
   return query(
-    `SELECT id, order_id, menu_item_id, menu_name, price, quantity, subtotal, created_at
+    `SELECT id, order_id, menu_item_id, menu_name, price, quantity, note, subtotal, created_at
        FROM order_items
       WHERE order_id = ?
       ORDER BY id ASC`,
@@ -89,7 +87,7 @@ export async function findItemsByOrderIds(orderIds, connection) {
   if (orderIds.length === 0) return [];
   const placeholders = orderIds.map(() => '?').join(', ');
   return query(
-    `SELECT id, order_id, menu_item_id, menu_name, price, quantity, subtotal, created_at
+    `SELECT id, order_id, menu_item_id, menu_name, price, quantity, note, subtotal, created_at
        FROM order_items
       WHERE order_id IN (${placeholders})
       ORDER BY order_id ASC, id ASC`,
@@ -164,24 +162,24 @@ export async function createOrder(
 
 /**
  * Membuat baris-baris item pesanan sekaligus.
- * Setiap baris menyimpan salinan nama dan harga menu saat pesanan dibuat,
- * sehingga perubahan menu di kemudian hari tidak mengubah riwayat.
+ * Tiap baris menyimpan salinan nama dan harga menu saat pesanan dibuat.
  */
 export async function createOrderItems(orderId, items, connection) {
   if (items.length === 0) return 0;
 
-  const placeholders = items.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+  const placeholders = items.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
   const params = items.flatMap((item) => [
     orderId,
     item.menuItemId,
     item.menuName,
     item.price,
     item.quantity,
+    item.note ?? null,
     item.subtotal,
   ]);
 
   const result = await execute(
-    `INSERT INTO order_items (order_id, menu_item_id, menu_name, price, quantity, subtotal)
+    `INSERT INTO order_items (order_id, menu_item_id, menu_name, price, quantity, note, subtotal)
      VALUES ${placeholders}`,
     params,
     connection,
@@ -201,6 +199,19 @@ export async function updateStatus(id, status, { rejectReason } = {}, connection
     await execute('UPDATE orders SET status = ? WHERE id = ?', [status, id], connection);
   }
   return findById(id, connection);
+}
+
+/** Menghitung jumlah pesanan per status milik seorang pembeli. */
+export async function countByStatusForUser(userId, connection) {
+  const rows = await query(
+    'SELECT status, COUNT(*) AS total FROM orders WHERE user_id = ? GROUP BY status',
+    [userId],
+    connection,
+  );
+  return rows.reduce((counts, row) => {
+    counts[row.status] = Number(row.total);
+    return counts;
+  }, {});
 }
 
 /** Menghitung jumlah pesanan per status untuk dasbor penjual. */

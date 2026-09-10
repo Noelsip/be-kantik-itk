@@ -2,9 +2,7 @@ import { randomInt } from 'node:crypto';
 
 /**
  * Pembuatan nomor pesanan dengan format ORD-YYYYMMDD-XXXX.
- *
- * Empat digit terakhir diacak agar nomor tidak mudah ditebak berurutan.
- * Keunikan nomor tetap dijamin oleh batasan unik pada kolom `order_number`.
+ * Empat digit terakhir diacak; keunikan dijamin batasan unik `order_number`.
  */
 export function generateOrderNumber(date = new Date()) {
   const year = date.getFullYear();

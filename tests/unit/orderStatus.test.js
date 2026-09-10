@@ -12,13 +12,11 @@ import {
 
 /**
  * Pengujian aturan perpindahan status pesanan.
- *
- * Aturan ini paling rawan rusak oleh perubahan berikutnya, sehingga seluruh
- * kemungkinan pasangan status diuji, bukan hanya alur normalnya.
+ * Seluruh kemungkinan pasangan status diuji, bukan hanya alur normalnya.
  */
 
 const ALLOWED = new Set([
-  `${ORDER_STATUS.MENUNGGU_KONFIRMASI}->${ORDER_STATUS.DITERIMA}`,
+  `${ORDER_STATUS.MENUNGGU_KONFIRMASI}->${ORDER_STATUS.DIPROSES}`,
   `${ORDER_STATUS.MENUNGGU_KONFIRMASI}->${ORDER_STATUS.DITOLAK}`,
   `${ORDER_STATUS.MENUNGGU_KONFIRMASI}->${ORDER_STATUS.DIBATALKAN}`,
   `${ORDER_STATUS.DITERIMA}->${ORDER_STATUS.DIPROSES}`,
@@ -60,6 +58,16 @@ test('perpindahan di luar daftar selalu ditolak', () => {
   }
   // Tujuh dikali tujuh pasangan, dikurangi enam perpindahan yang sah.
   assert.equal(rejected, 43);
+});
+
+test('penerimaan pesanan langsung menuju sedang disiapkan', () => {
+  assert.equal(canTransition(ORDER_STATUS.MENUNGGU_KONFIRMASI, ORDER_STATUS.DIPROSES), true);
+  // Tahap `diterima` tidak lagi menjadi tujuan pada alur baru.
+  assert.equal(canTransition(ORDER_STATUS.MENUNGGU_KONFIRMASI, ORDER_STATUS.DITERIMA), false);
+});
+
+test('pesanan lama berstatus diterima tetap dapat dilanjutkan', () => {
+  assert.equal(canTransition(ORDER_STATUS.DITERIMA, ORDER_STATUS.DIPROSES), true);
 });
 
 test('pesanan tidak dapat mundur ke tahap sebelumnya', () => {
@@ -111,4 +119,5 @@ test('riwayat pesanan mencakup selesai, ditolak, dan dibatalkan', () => {
 test('status ditampilkan dalam huruf besar pada pesan pengguna', () => {
   assert.equal(formatStatus(ORDER_STATUS.SIAP_DIAMBIL), 'SIAP DIAMBIL');
   assert.equal(formatStatus(ORDER_STATUS.MENUNGGU_KONFIRMASI), 'MENUNGGU KONFIRMASI');
+  assert.equal(formatStatus(ORDER_STATUS.DIPROSES), 'SEDANG DISIAPKAN');
 });

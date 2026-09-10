@@ -2,9 +2,7 @@ import { query, queryOne, execute } from '../config/database.js';
 
 /**
  * Fungsi untuk mengakses data tabel `carts` dan `cart_items`.
- *
- * Setiap pembeli hanya memiliki satu keranjang, dijamin oleh batasan unik pada
- * kolom `carts.user_id`.
+ * Satu pembeli hanya punya satu keranjang, dijamin batasan unik `carts.user_id`.
  */
 
 /** Mengambil keranjang milik seorang pembeli. */
@@ -18,9 +16,7 @@ export async function findCartByUserId(userId, connection) {
 
 /**
  * Mengambil keranjang pembeli, dan membuatnya bila belum ada.
- *
- * Penyisipan ditulis agar aman diulang, sehingga dua permintaan bersamaan dari
- * pengguna yang sama tidak menimbulkan kegagalan kunci ganda.
+ * Penyisipan aman diulang sehingga permintaan bersamaan tidak bertabrakan.
  */
 export async function findOrCreateCartByUserId(userId, connection) {
   const existing = await findCartByUserId(userId, connection);
@@ -42,7 +38,7 @@ export async function findItemsByCartId(cartId, connection) {
   return query(
     `SELECT ci.id, ci.cart_id, ci.menu_item_id, ci.quantity, ci.created_at, ci.updated_at,
             m.name AS menu_name, m.price, m.image_url, m.is_available, m.canteen_id,
-            m.category_id, cat.name AS category_name,
+            ci.note, m.category_id, cat.name AS category_name,
             c.name AS canteen_name, c.is_open AS canteen_is_open
        FROM cart_items ci
        JOIN menu_items m ON m.id = ci.menu_item_id AND m.deleted_at IS NULL
@@ -61,7 +57,7 @@ export async function findItemsByCartId(cartId, connection) {
  */
 export async function findItemsByCartIdForUpdate(cartId, connection) {
   return query(
-    `SELECT ci.id, ci.menu_item_id, ci.quantity,
+    `SELECT ci.id, ci.menu_item_id, ci.quantity, ci.note,
             m.name AS menu_name, m.price, m.is_available, m.canteen_id, m.deleted_at
        FROM cart_items ci
        JOIN menu_items m ON m.id = ci.menu_item_id
@@ -121,20 +117,39 @@ export async function findItemByMenu(cartId, menuItemId, connection) {
  * Menambahkan menu ke keranjang, atau menambah jumlahnya bila menu tersebut
  * sudah ada. Perilaku ini bersandar pada indeks unik (cart_id, menu_item_id).
  */
-export async function addItem({ cartId, menuItemId, quantity }, connection) {
+export async function addItem({ cartId, menuItemId, quantity, note = null }, connection) {
+  // Catatan yang dikirim menimpa catatan sebelumnya, sedangkan pengiriman tanpa
+  // catatan membiarkan catatan lama tetap ada.
   await execute(
-    `INSERT INTO cart_items (cart_id, menu_item_id, quantity)
-     VALUES (?, ?, ?)
-     ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)`,
-    [cartId, menuItemId, quantity],
+    `INSERT INTO cart_items (cart_id, menu_item_id, quantity, note)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       quantity = quantity + VALUES(quantity),
+       note = COALESCE(VALUES(note), note)`,
+    [cartId, menuItemId, quantity, note],
     connection,
   );
   return findItemByMenu(cartId, menuItemId, connection);
 }
 
 /** Mengubah jumlah pada satu item keranjang. */
-export async function updateItemQuantity(id, quantity, connection) {
-  await execute('UPDATE cart_items SET quantity = ? WHERE id = ?', [quantity, id], connection);
+export async function updateItem(id, { quantity, note }, connection) {
+  const fields = [];
+  const params = [];
+
+  if (quantity !== undefined) {
+    fields.push('quantity = ?');
+    params.push(quantity);
+  }
+  if (note !== undefined) {
+    fields.push('note = ?');
+    params.push(note);
+  }
+
+  if (fields.length === 0) return findItemById(id, connection);
+
+  params.push(id);
+  await execute(`UPDATE cart_items SET ${fields.join(', ')} WHERE id = ?`, params, connection);
   return findItemById(id, connection);
 }
 

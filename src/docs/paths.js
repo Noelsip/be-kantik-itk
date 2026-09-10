@@ -2,9 +2,7 @@ import { ORDER_STATUS_VALUES } from '../constants/orderStatus.js';
 
 /**
  * Kumpulan definisi jalur OpenAPI.
- *
- * Dipisahkan dari berkas skema semata-mata agar ukuran tiap berkas wajar.
- * Keduanya digabungkan pada berkas openapi.js.
+ * Dipisahkan dari berkas skema agar ukuran tiap berkas wajar.
  */
 
 const idPathParam = {
@@ -93,7 +91,7 @@ export const paths = {
     },
   },
 
-  // === Autentikasi ==========================================================
+  // Jalur proses masuk dan keluar.
 
   '/api/auth/google': {
     post: {
@@ -113,6 +111,13 @@ export const paths = {
         '- Pembeli wajib memakai email kampus: `@student.itk.ac.id`, `@lecture.itk.ac.id`, atau `@itk.ac.id`.',
         '- Peran penjual **tidak** ditentukan oleh domain email, melainkan dari daftar penjual yang dikelola pengelola aplikasi di sisi server.',
         '- Alamat yang terdaftar sebagai penjual dikecualikan dari aturan domain kampus.',
+        '',
+        '**Asal akun pembeli**',
+        '- `<NIM>@student.itk.ac.id` mengisi `faculty` dan `studyProgram` dari dua digit awal NIM.',
+        '- `@lecture.itk.ac.id` mengisi `affiliation` menjadi `Dosen ITK`, tanpa program studi.',
+        '- `@itk.ac.id` mengisi `affiliation` menjadi `Email Umum ITK`, tanpa program studi.',
+        '- Kedua domain terakhir hanya berlaku bila bagian depan alamat bukan angka, karena NIM hanya sah pada domain mahasiswa.',
+        '- Nilai ini diselaraskan ulang pada setiap kali masuk dan tidak dapat diisi dari aplikasi.',
         '',
         'Tidak ada pendaftaran manual. Akun pembeli dibuat otomatis pada saat pertama kali masuk.',
         '',
@@ -205,7 +210,7 @@ export const paths = {
     },
   },
 
-  // === Profil ===============================================================
+  // Jalur profil pengguna.
 
   '/api/users/me': {
     get: {
@@ -239,6 +244,49 @@ export const paths = {
                   maxLength: 255,
                   description: 'Alamat gambar. Wajib diawali `http://` atau `https://`.',
                 },
+                whatsapp: {
+                  type: ['string', 'null'],
+                  example: '081234567890',
+                  description:
+                    'Nomor WhatsApp. Penulisan 08xx, 8xx, 62xx, maupun +62xx diterima dan ' +
+                    'dibakukan server menjadi bentuk berawalan 62. Kirim `null` untuk mengosongkan.',
+                },
+              },
+            },
+            example: { name: 'Budi Santoso' },
+          },
+        },
+      },
+      responses: { 200: ok('Profil berhasil diperbarui.', objectOf('User')), ...commonErrors },
+    },
+    put: {
+      tags: ['Profil'],
+      summary: 'Ubah profil (bentuk lain)',
+      description:
+        'Berperilaku persis sama dengan PATCH pada alamat ini, disediakan karena kedua metode ' +
+        'sama-sama lazim dipakai aplikasi untuk menyunting profil.',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              minProperties: 1,
+              properties: {
+                name: { type: 'string', minLength: 1, maxLength: 100 },
+                profileImage: {
+                  type: ['string', 'null'],
+                  maxLength: 255,
+                  description: 'Alamat gambar. Wajib diawali `http://` atau `https://`.',
+                },
+                whatsapp: {
+                  type: ['string', 'null'],
+                  example: '081234567890',
+                  description:
+                    'Nomor WhatsApp. Penulisan 08xx, 8xx, 62xx, maupun +62xx diterima dan ' +
+                    'dibakukan server menjadi bentuk berawalan 62. Kirim `null` untuk mengosongkan.',
+                },
               },
             },
             example: { name: 'Budi Santoso' },
@@ -249,7 +297,255 @@ export const paths = {
     },
   },
 
-  // === Kantin ===============================================================
+  // Jalur notifikasi dan perangkat penerimanya.
+
+  '/api/notifications': {
+    get: {
+      tags: ['Notifikasi'],
+      summary: 'Daftar notifikasi',
+      description: [
+        'Menampilkan riwayat notifikasi milik pengguna yang sedang masuk, terbaru lebih dahulu.',
+        '',
+        'Jumlah yang belum dibaca ikut dikirim pada `meta.unreadCount`, sehingga lencana pada aplikasi dapat langsung diperbarui tanpa panggilan tambahan.',
+      ].join('\n'),
+      parameters: [
+        ...pageParams,
+        {
+          name: 'unreadOnly',
+          in: 'query',
+          schema: { type: 'string', enum: ['true', 'false'] },
+          description: 'Bila `true`, hanya notifikasi yang belum dibaca yang ditampilkan.',
+        },
+      ],
+      responses: {
+        200: ok('Daftar notifikasi.', listOf('Notification'), { withMeta: true }),
+        ...commonErrors,
+      },
+    },
+  },
+
+  '/api/notifications/unread-count': {
+    get: {
+      tags: ['Notifikasi'],
+      summary: 'Jumlah notifikasi belum dibaca',
+      description:
+        'Jawaban yang sangat ringan, cocok dipanggil berkala saat aplikasi terbuka untuk menyegarkan lencana notifikasi.',
+      responses: {
+        200: ok('Jumlah notifikasi belum dibaca.', {
+          type: 'object',
+          properties: { unreadCount: { type: 'integer', example: 3 } },
+        }),
+        ...commonErrors,
+      },
+    },
+  },
+
+  '/api/notifications/read-all': {
+    patch: {
+      tags: ['Notifikasi'],
+      summary: 'Tandai seluruh notifikasi sudah dibaca',
+      responses: {
+        200: ok('Seluruh notifikasi ditandai sudah dibaca.', {
+          type: 'object',
+          properties: {
+            markedCount: { type: 'integer', example: 5 },
+            unreadCount: { type: 'integer', example: 0 },
+          },
+        }),
+        ...commonErrors,
+      },
+    },
+  },
+
+  '/api/notifications/{id}/read': {
+    patch: {
+      tags: ['Notifikasi'],
+      summary: 'Tandai satu notifikasi sudah dibaca',
+      parameters: [idPathParam],
+      responses: {
+        200: ok('Notifikasi ditandai sudah dibaca.', objectOf('Notification')),
+        404: err('NotFound'),
+        ...commonErrors,
+      },
+    },
+  },
+
+  '/api/notifications/devices': {
+    post: {
+      tags: ['Notifikasi'],
+      summary: 'Daftarkan perangkat penerima pesan push',
+      description: [
+        'Menyimpan token perangkat dari Firebase Cloud Messaging agar akun ini dapat menerima pesan push.',
+        '',
+        '**Kapan dipanggil**',
+        '- Sesudah pengguna berhasil masuk dan izin notifikasi diberikan.',
+        '- Setiap kali Firebase memperbarui token perangkat.',
+        '',
+        'Satu token hanya dimiliki satu akun. Bila perangkat yang sama dipakai akun lain, tokennya otomatis berpindah sehingga pesan tidak salah alamat.',
+        '',
+        'Mendaftarkan token yang sama berulang kali tidak dianggap kesalahan.',
+      ].join('\n'),
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['token'],
+              additionalProperties: false,
+              properties: {
+                token: { type: 'string', maxLength: 255, description: 'Token perangkat dari Firebase.' },
+                platform: {
+                  type: 'string',
+                  enum: ['android', 'ios', 'web'],
+                  default: 'android',
+                },
+              },
+            },
+            example: { token: 'fcm-token-perangkat', platform: 'android' },
+          },
+        },
+      },
+      responses: {
+        201: ok('Perangkat didaftarkan.', {
+          type: 'object',
+          properties: { registered: { type: 'boolean', const: true } },
+        }),
+        ...commonErrors,
+      },
+    },
+  },
+
+  '/api/notifications/devices/{token}': {
+    delete: {
+      tags: ['Notifikasi'],
+      summary: 'Cabut pendaftaran perangkat',
+      description:
+        'Menghentikan pengiriman pesan push ke perangkat tersebut. Panggil sebelum pengguna keluar, agar pemilik berikutnya tidak menerima notifikasi milik akun sebelumnya.',
+      parameters: [
+        {
+          name: 'token',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', maxLength: 255 },
+          description: 'Token perangkat yang hendak dicabut.',
+        },
+      ],
+      responses: {
+        200: ok('Perangkat dicabut.', {
+          type: 'object',
+          properties: { unregistered: { type: 'boolean', const: true } },
+        }),
+        404: err('NotFound'),
+        ...commonErrors,
+      },
+    },
+  },
+
+  // Jalur unggah berkas gambar.
+
+  '/api/uploads': {
+    post: {
+      tags: ['Unggahan'],
+      summary: 'Unggah gambar',
+      description: [
+        'Mengunggah satu berkas gambar dan mengembalikan alamatnya.',
+        '',
+        'Permintaan dikirim sebagai `multipart/form-data` dengan nama field `file`.',
+        '',
+        'Alamat pada `data.url` dapat langsung dipasang ke field `imageUrl` saat menambah atau mengubah menu maupun kantin.',
+        '',
+        '**Batasan**',
+        '- Jenis berkas: JPG, PNG, atau WebP.',
+        '- Ukuran maksimal 5 MB; berkas yang lebih besar ditolak dengan kode 413.',
+        '- Satu berkas untuk tiap permintaan.',
+      ].join('\n'),
+      requestBody: {
+        required: true,
+        content: {
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              required: ['file'],
+              properties: {
+                file: {
+                  type: 'string',
+                  format: 'binary',
+                  description: 'Berkas gambar JPG, PNG, atau WebP, maksimal 5 MB.',
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: ok('Gambar berhasil diunggah.', {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              example: 'https://api-kantinitk.noelsipayung.me/uploads/m1a2b3-9f8e7d.jpg',
+            },
+            fileName: { type: 'string', example: 'm1a2b3-9f8e7d.jpg' },
+            mimeType: { type: 'string', example: 'image/jpeg' },
+            size: { type: 'integer', example: 204800, description: 'Ukuran berkas dalam byte.' },
+          },
+        }),
+        413: err('PayloadTooLarge'),
+        ...commonErrors,
+      },
+    },
+  },
+
+  '/api/users/me/stats': {
+    get: {
+      tags: ['Profil'],
+      summary: 'Ringkasan angka profil',
+      description: [
+        'Menampilkan jumlah pesanan beserta rinciannya untuk halaman profil.',
+        '',
+        'Angka dihitung langsung dengan COUNT di database, sehingga aplikasi tidak perlu mengunduh seluruh pesanan hanya untuk menampilkan beberapa angka.',
+        '',
+        'Isinya menyesuaikan peran: pembeli memperoleh `favoriteCount`, penjual memperoleh `menuCount`.',
+      ].join('\n'),
+      responses: { 200: ok('Ringkasan profil.', objectOf('ProfileStats')), ...commonErrors },
+    },
+  },
+
+  '/api/users/me/photo': {
+    post: {
+      tags: ['Profil'],
+      summary: 'Unggah foto profil',
+      description:
+        'Mengunggah berkas gambar sekaligus memasangnya sebagai foto profil, sehingga aplikasi tidak perlu memanggil dua endpoint. ' +
+        'Batasan jenis dan ukuran berkasnya sama dengan `/api/uploads`.',
+      requestBody: {
+        required: true,
+        content: {
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              required: ['file'],
+              properties: {
+                file: {
+                  type: 'string',
+                  format: 'binary',
+                  description: 'Berkas gambar JPG, PNG, atau WebP, maksimal 5 MB.',
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: ok('Foto profil berhasil diperbarui.', objectOf('User')),
+        413: err('PayloadTooLarge'),
+        ...commonErrors,
+      },
+    },
+  },
+
+  // Jalur katalog kantin.
 
   '/api/canteens': {
     get: {
@@ -265,6 +561,18 @@ export const paths = {
           in: 'query',
           schema: { type: 'string', enum: ['true', 'false'] },
           description: 'Saring hanya kantin yang buka (`true`) atau tutup (`false`).',
+        },
+        {
+          name: 'sortBy',
+          in: 'query',
+          schema: { type: 'string', enum: ['name', 'menuCount', 'createdAt'] },
+          description: 'Dasar pengurutan. Kantin yang buka tetap didahulukan.',
+        },
+        {
+          name: 'sortOrder',
+          in: 'query',
+          schema: { type: 'string', enum: ['asc', 'desc'], default: 'asc' },
+          description: 'Arah pengurutan.',
         },
       ],
       responses: { 200: ok('Daftar kantin.', listOf('Canteen'), { withMeta: true }), ...commonErrors },
@@ -303,6 +611,18 @@ export const paths = {
           schema: { type: 'string', enum: ['true', 'false'] },
           description: 'Saring hanya menu yang tersedia.',
         },
+        {
+          name: 'sortBy',
+          in: 'query',
+          schema: { type: 'string', enum: ['name', 'price', 'createdAt'] },
+          description: 'Dasar pengurutan. Menu yang tersedia tetap didahulukan.',
+        },
+        {
+          name: 'sortOrder',
+          in: 'query',
+          schema: { type: 'string', enum: ['asc', 'desc'], default: 'asc' },
+          description: 'Arah pengurutan.',
+        },
       ],
       responses: {
         200: ok(
@@ -322,7 +642,7 @@ export const paths = {
     },
   },
 
-  // === Menu =================================================================
+  // Jalur katalog menu.
 
   '/api/menu': {
     get: {
@@ -356,6 +676,18 @@ export const paths = {
           schema: { type: 'string', enum: ['true', 'false'] },
           description: 'Saring hanya menu yang tersedia.',
         },
+        {
+          name: 'sortBy',
+          in: 'query',
+          schema: { type: 'string', enum: ['name', 'price', 'createdAt'] },
+          description: 'Dasar pengurutan. Menu yang tersedia tetap didahulukan.',
+        },
+        {
+          name: 'sortOrder',
+          in: 'query',
+          schema: { type: 'string', enum: ['asc', 'desc'], default: 'asc' },
+          description: 'Arah pengurutan.',
+        },
       ],
       responses: { 200: ok('Daftar menu.', listOf('MenuItem'), { withMeta: true }), ...commonErrors },
     },
@@ -372,6 +704,38 @@ export const paths = {
   },
 
   '/api/categories': {
+    post: {
+      tags: ['Kantin'],
+      summary: 'Buat kategori menu',
+      description: [
+        'Menambah kategori menu. Hanya penjual yang dapat memanggilnya.',
+        '',
+        'Sistem ini tidak memiliki peran admin, sehingga penambahan kategori dipercayakan kepada penjual yang membutuhkannya saat menyusun menu.',
+        '',
+        '**Nama yang sudah ada dipakai kembali**',
+        'Pencocokan mengabaikan besar kecil huruf, sehingga `makanan` akan memakai kategori `Makanan` yang sudah ada alih-alih membuat kategori kedua.',
+        'Kategori yang baru dibuat dijawab `201`, sedangkan yang dipakai kembali dijawab `200`.',
+      ].join('\n'),
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['name'],
+              additionalProperties: false,
+              properties: { name: { type: 'string', minLength: 1, maxLength: 100 } },
+            },
+            example: { name: 'Gorengan' },
+          },
+        },
+      },
+      responses: {
+        200: ok('Kategori sudah ada dan dipakai kembali.', objectOf('Category')),
+        201: ok('Kategori dibuat.', objectOf('Category')),
+        ...sellerErrors,
+      },
+    },
     get: {
       tags: ['Menu'],
       summary: 'Daftar kategori',
@@ -380,7 +744,73 @@ export const paths = {
     },
   },
 
-  // === Keranjang ============================================================
+  // Jalur menu favorit milik pembeli.
+
+  '/api/favorites': {
+    get: {
+      tags: ['Favorit'],
+      summary: 'Daftar menu favorit',
+      description:
+        'Menampilkan menu yang ditandai favorit oleh pembeli yang sedang masuk, terbaru lebih dahulu. ' +
+        'Menu yang sudah dihapus penjual tidak ikut ditampilkan.',
+      parameters: [...pageParams],
+      responses: { 200: ok('Daftar menu favorit.', listOf('MenuItem'), { withMeta: true }), ...buyerErrors },
+    },
+    post: {
+      tags: ['Favorit'],
+      summary: 'Tandai menu sebagai favorit',
+      description: [
+        'Menandai sebuah menu sebagai favorit.',
+        '',
+        'Penandaan bersifat idempoten: menandai menu yang sama berulang kali tetap menghasilkan satu baris favorit dan tidak dianggap kesalahan.',
+        '',
+        'Menu yang sedang tidak tersedia tetap boleh ditandai, karena favorit bukan penambahan ke keranjang.',
+      ].join('\n'),
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['menuItemId'],
+              properties: { menuItemId: { type: 'integer', minimum: 1, example: 5 } },
+            },
+          },
+        },
+      },
+      responses: {
+        201: ok('Menu ditambahkan ke favorit.', objectOf('MenuItem')),
+        404: err('MenuNotFound'),
+        ...buyerErrors,
+      },
+    },
+  },
+
+  '/api/favorites/{menuItemId}': {
+    delete: {
+      tags: ['Favorit'],
+      summary: 'Batalkan favorit sebuah menu',
+      description:
+        'Mengeluarkan menu dari daftar favorit. Menu yang memang belum ditandai tetap menghasilkan jawaban berhasil, ' +
+        'sehingga tombol favorit pada aplikasi aman ditekan berulang.',
+      parameters: [
+        {
+          name: 'menuItemId',
+          in: 'path',
+          required: true,
+          schema: { type: 'integer', minimum: 1 },
+          description: 'Id menu yang dibatalkan favoritnya.',
+        },
+      ],
+      responses: {
+        200: ok('Menu dikeluarkan dari favorit.', objectOf('MenuItem')),
+        404: err('MenuNotFound'),
+        ...buyerErrors,
+      },
+    },
+  },
+
+  // Jalur keranjang belanja.
 
   '/api/cart': {
     get: {
@@ -407,12 +837,10 @@ export const paths = {
         '',
         '**Aturan penting**',
         '- Menu yang sedang tidak tersedia tidak dapat ditambahkan.',
-        '- Satu keranjang hanya boleh berisi menu dari **satu kantin**.',
+        '- Keranjang boleh memuat menu dari beberapa kantin sekaligus.',
         '- Menambahkan menu yang sama akan menambah jumlahnya, bukan membuat baris baru.',
         '',
-        '**Bila menu berasal dari kantin berbeda**',
-        'Permintaan ditolak dengan kode `CART_DIFFERENT_CANTEEN`, dan bagian `error.details` berisi kantin lama serta kantin baru.',
-        'Tampilkan konfirmasi kepada pengguna, lalu kirim ulang permintaan yang sama dengan `replaceCanteen: true` bila pengguna setuju mengosongkan keranjang.',
+        'Isi keranjang dikelompokkan per kantin pada field `canteens`, dan pemisahannya menjadi beberapa pesanan dikerjakan saat pesanan dibuat.',
       ].join('\n'),
       requestBody: {
         required: true,
@@ -425,10 +853,12 @@ export const paths = {
               properties: {
                 menuItemId: { type: 'integer', minimum: 1 },
                 quantity: { type: 'integer', minimum: 1, maximum: 99, default: 1 },
-                replaceCanteen: {
-                  type: 'boolean',
-                  default: false,
-                  description: 'Bila `true`, keranjang dikosongkan lebih dulu saat menu berasal dari kantin lain.',
+                note: {
+                  type: ['string', 'null'],
+                  maxLength: 255,
+                  example: 'Pedas sedikit',
+                  description:
+                    'Catatan khusus untuk menu ini. Menambahkan menu yang sama disertai catatan baru akan menimpa catatan sebelumnya.',
                 },
               },
             },
@@ -439,7 +869,6 @@ export const paths = {
       responses: {
         201: ok('Menu ditambahkan ke keranjang.', objectOf('Cart')),
         404: err('MenuNotFound'),
-        409: err('CartConflict'),
         ...buyerErrors,
       },
     },
@@ -448,7 +877,7 @@ export const paths = {
   '/api/cart/items/{id}': {
     patch: {
       tags: ['Keranjang'],
-      summary: 'Ubah jumlah menu',
+      summary: 'Ubah jumlah atau catatan menu',
       description:
         'Mengubah jumlah salah satu item di keranjang. Gunakan `id` dari objek item keranjang, bukan `menuItemId`.',
       parameters: [{ ...idPathParam, description: 'Nomor item keranjang.' }],
@@ -460,7 +889,11 @@ export const paths = {
               type: 'object',
               required: ['quantity'],
               additionalProperties: false,
-              properties: { quantity: { type: 'integer', minimum: 1, maximum: 99 } },
+              properties: {
+                quantity: { type: 'integer', minimum: 1, maximum: 99 },
+                note: { type: ['string', 'null'], maxLength: 255, example: 'Tanpa sambal' },
+              },
+              minProperties: 1,
             },
             example: { quantity: 3 },
           },
@@ -486,7 +919,7 @@ export const paths = {
     },
   },
 
-  // === Pesanan (pembeli) ====================================================
+  // Jalur pesanan dari sisi pembeli.
 
   '/api/orders': {
     post: {
@@ -498,13 +931,18 @@ export const paths = {
         '**Yang dilakukan server**',
         '1. Memastikan keranjang tidak kosong.',
         '2. Memastikan seluruh menu masih ada dan masih tersedia.',
-        '3. Memastikan seluruh menu berasal dari satu kantin yang sama, dan kantin tersebut sedang buka.',
-        '4. Membaca harga terbaru langsung dari data menu.',
-        '5. Menghitung subtotal dan total di sisi server.',
-        '6. Menyimpan salinan nama dan harga menu agar riwayat tidak berubah di kemudian hari.',
-        '7. Mengosongkan keranjang.',
+        '3. Mengelompokkan isi keranjang menurut kantin asalnya.',
+        '4. Memastikan setiap kantin tersebut sedang buka.',
+        '5. Membaca harga terbaru langsung dari data menu.',
+        '6. Menghitung subtotal dan total di sisi server, terpisah untuk tiap kantin.',
+        '7. Menyimpan salinan nama dan harga menu agar riwayat tidak berubah di kemudian hari.',
+        '8. Mengosongkan keranjang.',
         '',
-        'Seluruh langkah di atas dijalankan sekaligus. Bila salah satu gagal, tidak ada pesanan yang tersimpan dan isi keranjang tetap utuh.',
+        '**Bentuk jawaban**',
+        'Keranjang boleh memuat menu dari beberapa kantin, dan tiap kantin menjadi satu pesanan tersendiri dengan nomor pesanannya masing-masing.',
+        'Karena itu `data` **selalu berupa daftar**, walau isinya hanya satu pesanan. Catatan pada `note` disalin ke seluruh pesanan yang terbentuk.',
+        '',
+        'Seluruh langkah di atas dijalankan sekaligus. Bila salah satu gagal, misalnya ada satu kantin yang sedang tutup, tidak ada satu pun pesanan yang tersimpan dan isi keranjang tetap utuh.',
         '',
         'Total pesanan **tidak** diambil dari aplikasi. Mengirimkan nilai harga atau total akan ditolak.',
         '',
@@ -530,7 +968,7 @@ export const paths = {
         },
       },
       responses: {
-        201: ok('Pesanan berhasil dibuat.', objectOf('Order')),
+        201: ok('Pesanan berhasil dibuat, satu untuk tiap kantin.', listOf('Order')),
         404: err('NotFound'),
         422: err('CheckoutFailed'),
         ...buyerErrors,
@@ -599,7 +1037,7 @@ export const paths = {
     },
   },
 
-  // === Penjual: dasbor & kantin ============================================
+  // Jalur dasbor dan kantin milik penjual.
 
   '/api/seller/dashboard': {
     get: {
@@ -647,6 +1085,11 @@ export const paths = {
                 description: { type: ['string', 'null'], maxLength: 1000 },
                 location: { type: ['string', 'null'], maxLength: 255 },
                 imageUrl: { type: ['string', 'null'], maxLength: 255 },
+                whatsapp: {
+                  type: ['string', 'null'],
+                  example: '081234567890',
+                  description: 'Nomor WhatsApp kantin, dibakukan server menjadi bentuk berawalan 62.',
+                },
                 isOpen: { type: 'boolean', default: true },
               },
             },
@@ -678,6 +1121,11 @@ export const paths = {
                 description: { type: ['string', 'null'], maxLength: 1000 },
                 location: { type: ['string', 'null'], maxLength: 255 },
                 imageUrl: { type: ['string', 'null'], maxLength: 255 },
+                whatsapp: {
+                  type: ['string', 'null'],
+                  example: '081234567890',
+                  description: 'Nomor WhatsApp kantin, dibakukan server menjadi bentuk berawalan 62.',
+                },
                 isOpen: { type: 'boolean' },
               },
             },
@@ -693,7 +1141,7 @@ export const paths = {
     },
   },
 
-  // === Penjual: menu ========================================================
+  // Jalur pengelolaan menu oleh penjual.
 
   '/api/seller/menu': {
     get: {
@@ -827,7 +1275,7 @@ export const paths = {
     },
   },
 
-  // === Penjual: pesanan =====================================================
+  // Jalur pengelolaan pesanan oleh penjual.
 
   '/api/seller/orders': {
     get: {
@@ -874,8 +1322,10 @@ const SELLER_ACTIONS = [
     path: 'accept',
     summary: 'Terima pesanan',
     from: 'Menunggu Konfirmasi',
-    to: 'Diterima',
-    detail: 'Menyatakan pesanan diterima dan akan disiapkan.',
+    to: 'Sedang Disiapkan',
+    detail:
+      'Menyatakan pesanan diterima. Status langsung berpindah ke `diproses`, sehingga pembeli ' +
+      'segera melihat pesanannya sedang disiapkan tanpa menunggu tindakan penjual berikutnya.',
   },
   {
     path: 'reject',
@@ -888,15 +1338,17 @@ const SELLER_ACTIONS = [
   },
   {
     path: 'process',
-    summary: 'Proses pesanan',
+    summary: 'Proses pesanan (pesanan lama)',
     from: 'Diterima',
-    to: 'Diproses',
-    detail: 'Menandakan makanan mulai disiapkan.',
+    to: 'Sedang Disiapkan',
+    detail:
+      'Hanya berlaku bagi pesanan lama yang masih berstatus `diterima`. Alur baru tidak lagi ' +
+      'melewati status tersebut karena penerimaan pesanan sudah langsung menuju `diproses`.',
   },
   {
     path: 'ready',
     summary: 'Tandai siap diambil',
-    from: 'Diproses',
+    from: 'Sedang Disiapkan',
     to: 'Siap Diambil',
     detail: 'Memberi tahu pembeli bahwa pesanan sudah dapat diambil di kantin.',
   },

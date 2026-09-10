@@ -41,9 +41,8 @@ function translateDatabaseError(error) {
 
 /**
  * Penanganan kesalahan terpusat.
- *
  * Satu-satunya tempat yang mengubah kesalahan menjadi respons HTTP, sehingga
- * bentuk respons tetap seragam dan rincian internal tidak pernah bocor.
+ * bentuknya seragam dan rincian internal tidak bocor.
  */
 // eslint-disable-next-line no-unused-vars -- Express mengenali handler dari jumlah argumennya.
 export function errorHandler(error, req, res, _next) {
@@ -52,6 +51,19 @@ export function errorHandler(error, req, res, _next) {
       statusCode: 400,
       code: ERROR_CODES.VALIDATION_ERROR,
       message: 'Data yang dikirim tidak dapat dibaca. Silakan coba lagi.',
+    });
+  }
+
+  // Kesalahan dari lapisan penerima berkas dikenali dari nama kelasnya.
+  if (error?.name === 'MulterError') {
+    const tooLarge = error.code === 'LIMIT_FILE_SIZE';
+    logger.debug(`${req.method} ${req.originalUrl} -> unggahan ditolak: ${error.code}`);
+    return sendError(res, {
+      statusCode: tooLarge ? 413 : 422,
+      code: tooLarge ? ERROR_CODES.PAYLOAD_TOO_LARGE : ERROR_CODES.VALIDATION_ERROR,
+      message: tooLarge
+        ? 'Ukuran gambar melebihi batas 5 MB.'
+        : 'Berkas yang dikirim tidak dapat diterima.',
     });
   }
 

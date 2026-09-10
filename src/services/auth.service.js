@@ -1,5 +1,12 @@
 import config from '../config/env.js';
 import { ROLES } from '../constants/roles.js';
+import {
+  STUDY_PROGRAMS,
+  AFFILIATIONS,
+  STUDENT_DOMAIN,
+  LECTURER_DOMAIN,
+  GENERAL_DOMAIN,
+} from '../constants/studyPrograms.js';
 import ERROR_CODES from '../constants/errorCodes.js';
 import { AuthenticationError, AuthorizationError, NotFoundError } from '../utils/errors.js';
 import { signAccessToken } from '../utils/jwt.js';
@@ -10,14 +17,8 @@ import { verifyGoogleIdToken } from './google.service.js';
 
 /**
  * Fungsi untuk menangani proses masuk dan penyediaan akun.
- *
- * Ada dua keputusan terpisah yang tidak boleh dicampur:
- * pertama, apakah sebuah email boleh memakai aplikasi, ditentukan oleh daftar
- * domain kampus; kedua, peran apa yang diterima email tersebut, ditentukan oleh
- * daftar penjual di konfigurasi server.
- *
- * Dengan pemisahan itu, alamat berdomain kampus tidak otomatis menjadi penjual,
- * dan klien tidak dapat memengaruhi kedua keputusan tersebut.
+ * Kelayakan email berasal dari daftar domain kampus, sedangkan perannya berasal
+ * dari daftar penjual di konfigurasi server.
  */
 
 /** Mengambil bagian domain dari sebuah alamat email. */
@@ -45,12 +46,63 @@ export function resolveRole(email) {
   return isSellerEmail(email) ? ROLES.PENJUAL : ROLES.PEMBELI;
 }
 
+/** Bentuk data akademik kosong untuk akun yang asalnya tidak dikenali. */
+export const EMPTY_ACADEMIC_PROFILE = Object.freeze({
+  nim: null,
+  affiliation: null,
+  faculty: null,
+  studyProgram: null,
+  studyProgramCode: null,
+});
+
+/**
+ * Menentukan asal akademik sebuah alamat email kampus.
+ *
+ * Bagian depan yang seluruhnya angka merupakan NIM, dan hanya sah bila
+ * berpasangan dengan domain mahasiswa. Alamat dosen maupun alamat umum kampus
+ * dikenali dari domainnya, dengan bagian depan yang bukan angka.
+ */
+export function resolveAcademicProfile(email) {
+  const value = String(email).toLowerCase();
+  const localPart = value.split('@')[0];
+  const domain = getEmailDomain(value);
+  const looksLikeNim = /^\d+$/.test(localPart);
+  const isStudentNim = domain === STUDENT_DOMAIN && looksLikeNim;
+
+  if (isStudentNim) {
+    const code = localPart.slice(0, 2);
+    const program = STUDY_PROGRAMS[code];
+    if (program) {
+      return Object.freeze({
+        nim: localPart,
+        affiliation: program.faculty,
+        faculty: program.faculty,
+        studyProgram: program.name,
+        studyProgramCode: code,
+      });
+    }
+    // NIM tetap dicatat meski dua digit awalnya belum terdaftar sebagai prodi.
+    return Object.freeze({ ...EMPTY_ACADEMIC_PROFILE, nim: localPart });
+  }
+
+  // Bagian depan berupa angka menandakan NIM, dan NIM hanya sah pada domain
+  // mahasiswa. Alamat semacam itu pada domain lain tidak dikenali.
+  if (looksLikeNim) return EMPTY_ACADEMIC_PROFILE;
+
+  if (domain === LECTURER_DOMAIN) {
+    return Object.freeze({ ...EMPTY_ACADEMIC_PROFILE, affiliation: AFFILIATIONS.DOSEN });
+  }
+  if (domain === GENERAL_DOMAIN) {
+    return Object.freeze({ ...EMPTY_ACADEMIC_PROFILE, affiliation: AFFILIATIONS.UMUM });
+  }
+
+  return EMPTY_ACADEMIC_PROFILE;
+}
+
 /**
  * Memastikan sebuah alamat email berhak memakai aplikasi.
- *
- * Penjual dikecualikan dari aturan domain kampus karena aturan tersebut
- * ditujukan untuk pembeli, sementara penjual kantin diberi izin satu per satu
- * melalui daftar di konfigurasi server.
+ * Penjual dikecualikan dari aturan domain kampus karena diberi izin satu per
+ * satu melalui konfigurasi server.
  */
 function assertEmailIsAllowed(email, role) {
   if (role === ROLES.PENJUAL) return;
@@ -66,10 +118,8 @@ function assertEmailIsAllowed(email, role) {
 
 /**
  * Menyusun identitas kampus dari bagian depan alamat email.
- *
- * Google tidak menyediakan nomor induk, sementara kolom `campus_id` bersifat
- * wajib dan unik, sehingga nilainya diturunkan di sini dan diberi akhiran angka
- * bila kebetulan bertabrakan.
+ * Google tidak menyediakan nomor induk, sementara `campus_id` wajib dan unik,
+ * sehingga nilainya diberi akhiran angka bila bertabrakan.
  */
 async function generateUniqueCampusId(email, connection) {
   const localPart = String(email).split('@')[0].replace(/[^a-zA-Z0-9._-]/g, '') || 'user';
@@ -90,6 +140,11 @@ async function findOrProvisionUser(identity) {
   const role = resolveRole(identity.email);
   assertEmailIsAllowed(identity.email, role);
 
+  // Data akademik hanya berlaku bagi pembeli, karena penjual bukan mahasiswa
+  // dan alamatnya tidak memuat NIM.
+  const academic =
+    role === ROLES.PEMBELI ? resolveAcademicProfile(identity.email) : EMPTY_ACADEMIC_PROFILE;
+
   return withTransaction(async (connection) => {
     let user =
       (await userRepository.findByGoogleId(identity.googleId, connection)) ??
@@ -105,6 +160,7 @@ async function findOrProvisionUser(identity) {
           email: identity.email,
           role,
           profileImage: identity.picture,
+          ...academic,
         },
         connection,
       );
@@ -122,6 +178,16 @@ async function findOrProvisionUser(identity) {
     if (user.role !== role) {
       logger.info(`Peran ${user.email} berubah: ${user.role} -> ${role}`);
       user = await userRepository.updateRole(user.id, role, connection);
+    }
+
+    // Menyelaraskan data akademik agar akun lama ikut terisi, dan kembali kosong
+    // bila pemiliknya berpindah menjadi penjual.
+    if (
+      user.study_program_code !== academic.studyProgramCode ||
+      user.affiliation !== academic.affiliation ||
+      user.nim !== academic.nim
+    ) {
+      user = await userRepository.updateAcademicProfile(user.id, academic, connection);
     }
 
     return user;
@@ -147,10 +213,7 @@ export async function loginWithGoogle(idToken) {
 
 /**
  * Memproses masuk cepat untuk keperluan pengembangan.
- *
- * Jalur ini menerbitkan sesi bagi akun yang sudah ada tanpa identitas Google.
- * Konfigurasi memastikan jalur ini selalu mati di lingkungan produksi, dan tidak
- * pernah membuat akun baru.
+ * Jalur ini selalu mati di lingkungan produksi dan tidak pernah membuat akun.
  */
 export async function devLogin(email) {
   if (!config.auth.devLoginEnabled) {
@@ -160,9 +223,21 @@ export async function devLogin(email) {
     );
   }
 
-  const user = await userRepository.findByEmail(email);
+  let user = await userRepository.findByEmail(email);
   if (!user) {
     throw new NotFoundError(`Akun ${email} tidak terdaftar.`);
+  }
+
+  // Data akademik diselaraskan seperti pada masuk lewat Google, agar perilaku
+  // kedua jalur tetap sama saat pengembangan.
+  const academic =
+    user.role === ROLES.PEMBELI ? resolveAcademicProfile(user.email) : EMPTY_ACADEMIC_PROFILE;
+  if (
+    user.study_program_code !== academic.studyProgramCode ||
+    user.affiliation !== academic.affiliation ||
+    user.nim !== academic.nim
+  ) {
+    user = await userRepository.updateAcademicProfile(user.id, academic);
   }
 
   logger.warn(`Masuk mode pengembangan dipakai untuk ${user.email}`);

@@ -1,0 +1,62 @@
+# Susunan layanan Kantin ITK untuk server.
+#
+# Jaringan `edge` merupakan jaringan milik nginx terdepan yang memegang porta 80
+# dan 443, sehingga permintaan dari domain dapat mencapai container api.
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: kantin-itk-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - internal
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-uroot', '-p${DB_PASSWORD}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build: .
+    image: kantin-itk-api:latest
+    container_name: kantin-itk-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: mysql
+      HOST: 0.0.0.0
+      PORT: '3000'
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - internal
+      - edge
+    volumes:
+      - uploads_data:/app/uploads
+      # Direktori kredensial dipasang baca-saja. Direktorinya sengaja yang
+      # dipasang, bukan berkasnya, agar layanan tetap dapat naik sebelum
+      # kredensial Firebase disiapkan.
+      - ./secrets:/app/secrets:ro
+    # Porta hanya dibuka ke localhost untuk pemeriksaan langsung dari server.
+    ports:
+      - '127.0.0.1:13000:3000'
+
+volumes:
+  mysql_data:
+  uploads_data:
+
+networks:
+  internal:
+  edge:
+    external: true
+    name: sim-rumah-maggot_maggot

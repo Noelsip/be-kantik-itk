@@ -10,6 +10,12 @@ export const getProfile = asyncHandler(async (req, res) => {
   return sendSuccess(res, { message: 'Profil pengguna', data: user });
 });
 
+/** Menangani permintaan ringkasan angka pada halaman profil. */
+export const getStats = asyncHandler(async (req, res) => {
+  const stats = await userService.getStats(req.user);
+  return sendSuccess(res, { message: 'Ringkasan profil', data: stats });
+});
+
 /** Menangani perubahan data profil. */
 export const updateProfile = asyncHandler(async (req, res) => {
   const user = await userService.updateProfile(req.user.id, req.body);

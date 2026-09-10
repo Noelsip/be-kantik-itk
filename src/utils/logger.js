@@ -2,9 +2,7 @@ import config from '../config/env.js';
 
 /**
  * Pencatat log sederhana dengan tingkat keparahan dan penanda waktu.
- *
- * Dibuat tanpa pustaka tambahan karena kebutuhannya hanya menulis baris log ke
- * keluaran standar. Penggantian ke pustaka lain cukup menyentuh berkas ini.
+ * Dibuat tanpa pustaka tambahan; penggantian cukup menyentuh berkas ini.
  */
 
 const LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
