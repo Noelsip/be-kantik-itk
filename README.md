@@ -463,8 +463,19 @@ JPG, PNG, dan WebP, maksimal 5 MB. Nama berkas ditentukan server secara acak,
 sehingga nama kiriman tidak dipakai sama sekali.
 
 `POST /api/uploads` mengembalikan `data.url` yang dapat langsung dipasang pada
-field `imageUrl` menu maupun kantin. Untuk foto profil tersedia jalan pintas
-`POST /api/users/me/photo` yang mengunggah sekaligus memasangnya.
+field `imageUrl` menu maupun kantin.
+
+Tersedia pula jalan pintas yang mengunggah sekaligus memasang, sehingga aplikasi
+cukup satu panggilan:
+
+| Metode | Alamat | Memasang pada |
+|---|---|---|
+| POST | `/api/users/me/photo` | Foto profil pengguna |
+| POST | `/api/seller/menu/:id/photo` | Foto sebuah menu |
+| POST | `/api/seller/canteen/photo` | Foto kantin |
+
+Bila pemasangannya gagal, misalnya menu tersebut milik penjual lain, berkas yang
+terlanjur terunggah ikut dibuang sehingga tidak meninggalkan sisa di server.
 
 Berkas disimpan pada volume `uploads_data` dan disajikan di `/uploads/...`.
 

@@ -1275,6 +1275,79 @@ export const paths = {
     },
   },
 
+  '/api/seller/canteen/photo': {
+    post: {
+      tags: ['Penjual - Kantin'],
+      summary: 'Unggah foto kantin',
+      description:
+        'Mengunggah berkas gambar sekaligus memasangnya sebagai foto kantin, sehingga aplikasi cukup satu panggilan. ' +
+        'Batasan jenis dan ukuran berkasnya sama dengan `/api/uploads`. Bila pemasangan gagal, berkasnya ikut dibuang.',
+      requestBody: {
+        required: true,
+        content: {
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              required: ['file'],
+              properties: {
+                file: {
+                  type: 'string',
+                  format: 'binary',
+                  description: 'Berkas gambar JPG, PNG, atau WebP, maksimal 5 MB.',
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: ok('Foto kantin berhasil diperbarui.', objectOf('Canteen')),
+        404: err('SellerNoCanteen'),
+        413: err('PayloadTooLarge'),
+        ...sellerErrors,
+      },
+    },
+  },
+
+  '/api/seller/menu/{id}/photo': {
+    post: {
+      tags: ['Penjual - Menu'],
+      summary: 'Unggah foto menu',
+      description: [
+        'Mengunggah berkas gambar sekaligus memasangnya sebagai foto sebuah menu, sehingga aplikasi cukup satu panggilan alih-alih mengunggah lalu mengubah menu.',
+        '',
+        'Menu milik penjual lain dijawab `404`, dan berkas yang terlanjur terunggah ikut dibuang sehingga tidak meninggalkan sisa di server.',
+        '',
+        'Batasan jenis dan ukuran berkasnya sama dengan `/api/uploads`.',
+      ].join('\n'),
+      parameters: [idPathParam],
+      requestBody: {
+        required: true,
+        content: {
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              required: ['file'],
+              properties: {
+                file: {
+                  type: 'string',
+                  format: 'binary',
+                  description: 'Berkas gambar JPG, PNG, atau WebP, maksimal 5 MB.',
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: ok('Foto menu berhasil diperbarui.', objectOf('MenuItem')),
+        404: err('MenuNotFound'),
+        413: err('PayloadTooLarge'),
+        ...sellerErrors,
+      },
+    },
+  },
+
   // Jalur pengelolaan pesanan oleh penjual.
 
   '/api/seller/orders': {

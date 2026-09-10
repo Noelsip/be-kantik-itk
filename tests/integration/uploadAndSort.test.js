@@ -106,6 +106,65 @@ test('alamat hasil unggah dapat dipasang sebagai foto menu', async () => {
   assert.equal(body.data.imageUrl, unggahan.data.url);
 });
 
+test('foto menu dapat diunggah sekaligus terpasang dalam satu panggilan', async () => {
+  const { body: dibuat } = await ctx.request('POST', '/api/seller/menu', {
+    token: ctx.tokens.sellerA,
+    body: { name: 'Menu Foto Sekali Jalan', price: 12000 },
+  });
+  assert.equal(dibuat.data.imageUrl, null);
+
+  const { status, body } = await ctx.request('POST', `/api/seller/menu/${dibuat.data.id}/photo`, {
+    token: ctx.tokens.sellerA,
+    body: formBerkas(berkasPng()),
+  });
+  assert.equal(status, 200, JSON.stringify(body));
+  assert.match(body.data.imageUrl, /\/uploads\/.+\.png$/);
+
+  // Perubahan benar-benar tersimpan, bukan sekadar ada di jawaban.
+  const dibaca = await ctx.request('GET', `/api/menu/${dibuat.data.id}`, {
+    token: ctx.tokens.buyer,
+  });
+  assert.equal(dibaca.body.data.imageUrl, body.data.imageUrl);
+});
+
+test('foto kantin dapat diunggah sekaligus terpasang', async () => {
+  const { status, body } = await ctx.request('POST', '/api/seller/canteen/photo', {
+    token: ctx.tokens.sellerA,
+    body: formBerkas(berkasPng()),
+  });
+  assert.equal(status, 200, JSON.stringify(body));
+  assert.match(body.data.imageUrl, /\/uploads\/.+\.png$/);
+
+  const dilihatPembeli = await ctx.request('GET', `/api/canteens/${ctx.fixtures.canteenA}`, {
+    token: ctx.tokens.buyer,
+  });
+  assert.equal(dilihatPembeli.body.data.imageUrl, body.data.imageUrl);
+});
+
+test('penjual tidak dapat memasang foto pada menu milik penjual lain', async () => {
+  const { status } = await ctx.request(
+    'POST',
+    `/api/seller/menu/${ctx.fixtures.menu.mieGorengB}/photo`,
+    { token: ctx.tokens.sellerA, body: formBerkas(berkasPng()) },
+  );
+  assert.equal(status, 404);
+
+  // Menu milik pemiliknya tidak ikut berubah.
+  const { body } = await ctx.request('GET', `/api/seller/menu/${ctx.fixtures.menu.mieGorengB}`, {
+    token: ctx.tokens.sellerB,
+  });
+  assert.equal(body.data.imageUrl, null);
+});
+
+test('pembeli tidak dapat memasang foto menu', async () => {
+  const { status } = await ctx.request(
+    'POST',
+    `/api/seller/menu/${ctx.fixtures.menu.nasiGoreng}/photo`,
+    { token: ctx.tokens.buyer, body: formBerkas(berkasPng()) },
+  );
+  assert.equal(status, 403);
+});
+
 test('daftar kantin dapat diurutkan berdasarkan nama', async () => {
   const naik = await ctx.request('GET', '/api/canteens?sortBy=name&sortOrder=asc', {
     token: ctx.tokens.buyer,

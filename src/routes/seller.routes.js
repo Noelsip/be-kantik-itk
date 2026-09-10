@@ -14,6 +14,8 @@ import {
   updateCanteenSchema,
 } from '../validators/seller.validator.js';
 import * as sellerController from '../controllers/seller.controller.js';
+import * as uploadController from '../controllers/upload.controller.js';
+import { uploadImage } from '../config/uploads.js';
 
 /**
  * Kumpulan jalur untuk penjual.
@@ -30,6 +32,9 @@ router.get('/canteen', sellerController.getCanteen);
 router.post('/canteen', writeLimiter, validate({ body: createCanteenSchema }), sellerController.createCanteen);
 router.patch('/canteen', writeLimiter, validate({ body: updateCanteenSchema }), sellerController.updateCanteen);
 
+// Mengunggah berkas gambar sekaligus memasangnya sebagai foto kantin.
+router.post('/canteen/photo', writeLimiter, uploadImage.single('file'), uploadController.uploadCanteenPhoto);
+
 router.get('/menu', validate({ query: sellerMenuQuerySchema }), sellerController.listMenu);
 router.get('/menu/:id', validate({ params: idParamSchema }), sellerController.getMenuItem);
 router.post('/menu', writeLimiter, validate({ body: createMenuSchema }), sellerController.createMenuItem);
@@ -40,6 +45,15 @@ router.patch(
   sellerController.updateMenuItem,
 );
 router.delete('/menu/:id', writeLimiter, validate({ params: idParamSchema }), sellerController.deleteMenuItem);
+
+// Mengunggah berkas gambar sekaligus memasangnya sebagai foto sebuah menu.
+router.post(
+  '/menu/:id/photo',
+  writeLimiter,
+  validate({ params: idParamSchema }),
+  uploadImage.single('file'),
+  uploadController.uploadMenuPhoto,
+);
 
 router.get('/orders', validate({ query: orderListQuerySchema }), sellerController.listOrders);
 router.get('/orders/:id', validate({ params: idParamSchema }), sellerController.getOrder);
