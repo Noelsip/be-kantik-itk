@@ -59,4 +59,4 @@ networks:
   internal:
   edge:
     external: true
-    name: sim-rumah-maggot_maggot
+    name: twenti-edge
