@@ -251,6 +251,13 @@ export const schemas = {
           'Penanda menu favorit milik pembeli yang sedang masuk. Hanya ikut terkirim pada jalur ' +
           'katalog dan favorit yang diakses pembeli, tidak pada jalur penjual.',
       },
+      soldCount: {
+        type: 'integer',
+        example: 42,
+        description:
+          'Jumlah porsi terjual dari pesanan yang tidak ditolak maupun dibatalkan. Hanya ada pada jalur ' +
+          'daftar menu (`/api/menu`, `/api/canteens/{id}/menu`, `/api/seller/menu`), tidak pada detail.',
+      },
       createdAt: { type: 'string', format: 'date-time' },
       updatedAt: { type: 'string', format: 'date-time' },
     },
@@ -291,7 +298,7 @@ export const schemas = {
     properties: {
       id: { type: 'integer', example: 4 },
       canteen: {
-        allOf: [{ $ref: '#/components/schemas/Canteen' }],
+        anyOf: [{ $ref: '#/components/schemas/Canteen' }, { type: 'null' }],
         description:
           'Kantin asal isi keranjang, hanya terisi bila seluruh isinya berasal dari satu kantin. ' +
           'Bernilai `null` ketika keranjang kosong maupun bercampur.',

@@ -88,6 +88,8 @@ export function toMenuResponse(menu) {
   };
   // Penanda favorit hanya ikut terkirim pada jalur yang membacanya untuk pembeli.
   if (menu.is_favorite !== undefined) response.isFavorite = toBoolean(menu.is_favorite);
+  // Jumlah terjual hanya dihitung pada jalur daftar menu.
+  if (menu.sold_count !== undefined) response.soldCount = Number(menu.sold_count);
   return response;
 }
 

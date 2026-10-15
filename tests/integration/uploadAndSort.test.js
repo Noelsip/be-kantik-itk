@@ -258,3 +258,40 @@ test('catatan yang terlalu panjang ditolak', async () => {
   });
   assert.equal(status, 422);
 });
+
+test('menu populer diurutkan dari porsi terjual terbanyak', async () => {
+  const { buyer, buyerTwo, sellerB } = ctx.tokens;
+  const { nasiGoreng, esTeh, mieGorengB } = ctx.fixtures.menu;
+
+  const pesan = async (token, items) => {
+    await ctx.request('DELETE', '/api/cart', { token });
+    for (const [menuItemId, quantity] of items) {
+      await ctx.request('POST', '/api/cart/items', { token, body: { menuItemId, quantity } });
+    }
+    const { body } = await ctx.request('POST', '/api/orders', { token });
+    return body.data;
+  };
+
+  const awal = await ctx.request('GET', '/api/menu?isAvailable=true', { token: buyer });
+  const terjualAwal = new Map(awal.body.data.map((m) => [m.id, m.soldCount]));
+
+  await pesan(buyer, [[mieGorengB, 5]]);
+  await pesan(buyerTwo, [[esTeh, 3]]);
+  // Pesanan yang ditolak tidak ikut dihitung.
+  const [ditolak] = await pesan(buyerTwo, [[nasiGoreng, 20]]);
+  const pemilik = ditolak.canteen.id === ctx.fixtures.canteenB ? sellerB : ctx.tokens.sellerA;
+  await ctx.request('PATCH', `/api/seller/orders/${ditolak.id}/reject`, { token: pemilik });
+
+  const { status, body } = await ctx.request('GET', '/api/menu?sortBy=popular&isAvailable=true', {
+    token: buyer,
+  });
+  assert.equal(status, 200);
+
+  const terjual = new Map(body.data.map((m) => [m.id, m.soldCount]));
+  assert.equal(terjual.get(mieGorengB) - (terjualAwal.get(mieGorengB) ?? 0), 5);
+  assert.equal(terjual.get(esTeh) - (terjualAwal.get(esTeh) ?? 0), 3);
+  assert.equal(terjual.get(nasiGoreng), terjualAwal.get(nasiGoreng), 'pesanan ditolak tidak dihitung');
+
+  const urutan = body.data.map((m) => m.soldCount);
+  assert.deepEqual(urutan, [...urutan].sort((a, b) => b - a));
+});

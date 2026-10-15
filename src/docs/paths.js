@@ -37,13 +37,18 @@ const searchParam = {
 };
 
 /** Menyusun satu respons berhasil yang membungkus data. */
-function ok(description, dataSchema, { withMeta = false, example } = {}) {
+function ok(description, dataSchema, { withMeta = false, metaExtra, example } = {}) {
   const properties = {
     success: { type: 'boolean', const: true },
     message: { type: 'string' },
     data: dataSchema,
   };
   if (withMeta) properties.meta = { $ref: '#/components/schemas/PaginationMeta' };
+  if (withMeta && metaExtra) {
+    properties.meta = {
+      allOf: [{ $ref: '#/components/schemas/PaginationMeta' }, { type: 'object', properties: metaExtra }],
+    };
+  }
 
   return {
     description,
@@ -318,7 +323,10 @@ export const paths = {
         },
       ],
       responses: {
-        200: ok('Daftar notifikasi.', listOf('Notification'), { withMeta: true }),
+        200: ok('Daftar notifikasi.', listOf('Notification'), {
+          withMeta: true,
+          metaExtra: { unreadCount: { type: 'integer', example: 3, description: 'Jumlah notifikasi belum dibaca.' } },
+        }),
         ...commonErrors,
       },
     },
@@ -585,7 +593,7 @@ export const paths = {
       summary: 'Detail kantin',
       description: 'Menampilkan informasi lengkap satu kantin.',
       parameters: [idPathParam],
-      responses: { 200: ok('Detail kantin.', objectOf('Canteen')), 404: err('NotFound'), ...commonErrors },
+      responses: { 200: ok('Detail kantin.', objectOf('Canteen')), 404: err('CanteenNotFound'), ...commonErrors },
     },
   },
 
@@ -614,8 +622,10 @@ export const paths = {
         {
           name: 'sortBy',
           in: 'query',
-          schema: { type: 'string', enum: ['name', 'price', 'createdAt'] },
-          description: 'Dasar pengurutan. Menu yang tersedia tetap didahulukan.',
+          schema: { type: 'string', enum: ['name', 'price', 'createdAt', 'popular'] },
+          description:
+            'Dasar pengurutan. Menu yang tersedia tetap didahulukan. `popular` mengurutkan dari ' +
+            '`soldCount` terbesar dan mengabaikan `sortOrder`.',
         },
         {
           name: 'sortOrder',
@@ -636,7 +646,7 @@ export const paths = {
           },
           { withMeta: true },
         ),
-        404: err('NotFound'),
+        404: err('CanteenNotFound'),
         ...commonErrors,
       },
     },
@@ -654,6 +664,10 @@ export const paths = {
         'Pencarian dan penyaringan dikerjakan di server, sehingga aplikasi tidak perlu mengunduh seluruh menu terlebih dahulu.',
         '',
         'Contoh: `/api/menu?search=nasi&categoryId=1`',
+        '',
+        '**Menu populer** untuk halaman Home: `/api/menu?sortBy=popular&isAvailable=true&limit=10`.',
+        'Kepopuleran dihitung dari jumlah porsi pada pesanan yang tidak ditolak maupun dibatalkan,',
+        'dan angkanya ikut terkirim pada field `soldCount`.',
       ].join('\n'),
       parameters: [
         ...pageParams,
@@ -679,8 +693,10 @@ export const paths = {
         {
           name: 'sortBy',
           in: 'query',
-          schema: { type: 'string', enum: ['name', 'price', 'createdAt'] },
-          description: 'Dasar pengurutan. Menu yang tersedia tetap didahulukan.',
+          schema: { type: 'string', enum: ['name', 'price', 'createdAt', 'popular'] },
+          description:
+            'Dasar pengurutan. Menu yang tersedia tetap didahulukan. `popular` mengurutkan dari ' +
+            '`soldCount` terbesar dan mengabaikan `sortOrder`.',
         },
         {
           name: 'sortOrder',
@@ -869,6 +885,7 @@ export const paths = {
       responses: {
         201: ok('Menu ditambahkan ke keranjang.', objectOf('Cart')),
         404: err('MenuNotFound'),
+        409: err('MenuUnavailable'),
         ...buyerErrors,
       },
     },
@@ -879,7 +896,8 @@ export const paths = {
       tags: ['Keranjang'],
       summary: 'Ubah jumlah atau catatan menu',
       description:
-        'Mengubah jumlah salah satu item di keranjang. Gunakan `id` dari objek item keranjang, bukan `menuItemId`.',
+        'Mengubah jumlah, catatan, atau keduanya pada salah satu item di keranjang. Kirim minimal satu field. ' +
+        'Gunakan `id` dari objek item keranjang, bukan `menuItemId`.',
       parameters: [{ ...idPathParam, description: 'Nomor item keranjang.' }],
       requestBody: {
         required: true,
@@ -887,7 +905,6 @@ export const paths = {
           'application/json': {
             schema: {
               type: 'object',
-              required: ['quantity'],
               additionalProperties: false,
               properties: {
                 quantity: { type: 'integer', minimum: 1, maximum: 99 },
@@ -969,9 +986,9 @@ export const paths = {
       },
       responses: {
         201: ok('Pesanan berhasil dibuat, satu untuk tiap kantin.', listOf('Order')),
+        ...buyerErrors,
         404: err('NotFound'),
         422: err('CheckoutFailed'),
-        ...buyerErrors,
       },
     },
     get: {
@@ -1362,7 +1379,9 @@ export const paths = {
           name: 'scope',
           in: 'query',
           schema: { type: 'string', enum: ['active', 'history', 'all'], default: 'all' },
-          description: 'Gunakan `active` untuk menampilkan pesanan yang masih berjalan.',
+          description:
+            '`active` untuk pesanan yang masih berjalan, `history` untuk pesanan selesai, ditolak, atau ' +
+            'dibatalkan, dan `all` untuk seluruhnya. Diabaikan bila `status` diisi.',
         },
         {
           name: 'status',

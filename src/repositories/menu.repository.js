@@ -86,6 +86,16 @@ const MENU_SORT_COLUMNS = Object.freeze({
   createdAt: 'm.created_at',
 });
 
+/**
+ * Jumlah porsi terjual per menu, dasar urutan menu populer. Pesanan yang
+ * ditolak maupun dibatalkan tidak dihitung karena tidak pernah berpindah tangan.
+ */
+const SOLD_COUNT_COLUMN = `,
+  (SELECT COALESCE(SUM(oi.quantity), 0)
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+    WHERE oi.menu_item_id = m.id AND o.status NOT IN ('ditolak', 'dibatalkan')) AS sold_count`;
+
 export async function findAll(filters = {}, connection) {
   const {
     search,
@@ -130,17 +140,21 @@ export async function findAll(filters = {}, connection) {
   );
 
   // Menu yang tersedia tetap didahulukan, lalu menyusul urutan pilihan pengguna.
+  // Urutan populer selalu dimulai dari yang paling laris, tanpa melihat sortOrder.
   const column = MENU_SORT_COLUMNS[sortBy];
   const direction = sortOrder === 'desc' ? 'DESC' : 'ASC';
-  const orderBy = column
-    ? `m.is_available DESC, ${column} ${direction}, m.id ASC`
-    : 'm.is_available DESC, m.name ASC';
+  const orderBy =
+    sortBy === 'popular'
+      ? 'm.is_available DESC, sold_count DESC, m.name ASC, m.id ASC'
+      : column
+        ? `m.is_available DESC, ${column} ${direction}, m.id ASC`
+        : 'm.is_available DESC, m.name ASC';
 
   // Penanda favorit berada pada klausa SELECT, sehingga parameternya mendahului
   // parameter penyaringan.
   const rowParams = viewerId === undefined ? params : [viewerId, ...params];
   const rows = await query(
-    `SELECT ${SELECT_COLUMNS}${favoriteColumn(viewerId)} ${FROM_CLAUSE} ${where}
+    `SELECT ${SELECT_COLUMNS}${SOLD_COUNT_COLUMN}${favoriteColumn(viewerId)} ${FROM_CLAUSE} ${where}
       ORDER BY ${orderBy}
       LIMIT ${pagination.limit} OFFSET ${pagination.offset}`,
     rowParams,

@@ -362,6 +362,20 @@ test('kelompok riwayat hanya memuat pesanan yang sudah berakhir', async () => {
   }
 });
 
+test('kelompok riwayat penjual hanya memuat pesanan yang sudah berakhir', async () => {
+  await createOrder();
+  const batal = await createOrder();
+  await ctx.request('PATCH', `/api/orders/${batal.id}/cancel`, { token: ctx.tokens.buyer });
+
+  const { body } = await ctx.request('GET', '/api/seller/orders?scope=history', {
+    token: ctx.tokens.sellerA,
+  });
+  assert.ok(body.data.length > 0);
+  for (const item of body.data) {
+    assert.ok(['selesai', 'ditolak', 'dibatalkan'].includes(item.status), item.status);
+  }
+});
+
 test('dasbor penjual menampilkan jumlah pesanan per status', async () => {
   const { status, body } = await ctx.request('GET', '/api/seller/dashboard', {
     token: ctx.tokens.sellerA,

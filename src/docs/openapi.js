@@ -49,6 +49,52 @@ const description = [
   '',
   'Pembayaran dilakukan langsung di kantin saat pesanan diambil. Sistem tidak',
   'menyimpan data pembayaran dalam bentuk apa pun.',
+  '',
+  '## Sesi berakhir',
+  '',
+  'Tidak ada refresh token. Bila jawaban berstatus 401 dengan kode `TOKEN_EXPIRED`,',
+  '`INVALID_TOKEN`, atau `UNAUTHENTICATED`, hapus kunci akses yang tersimpan lalu',
+  'arahkan pengguna ke halaman masuk.',
+  '',
+  '## Endpoint per halaman aplikasi',
+  '',
+  '**Masuk**',
+  '- Login Google: `POST /api/auth/google`, lalu arahkan sesuai `data.user.role`.',
+  '- Akun ditolak: tampilkan `message` dari kode `EMAIL_DOMAIN_NOT_ALLOWED`.',
+  '- Splash: `GET /api/auth/me` untuk memeriksa kunci akses yang tersimpan.',
+  '',
+  '**Pembeli**',
+  '- Home: `GET /api/canteens`, `GET /api/categories`, dan menu populer',
+  '  `GET /api/menu?sortBy=popular&isAvailable=true&limit=10`.',
+  '- Explore, cari, dan saring: `GET /api/menu?search=...&categoryId=...`.',
+  '- Detail kantin dan menunya: `GET /api/canteens/{id}/menu`.',
+  '- Detail menu: `GET /api/menu/{id}`.',
+  '- Favorit: `GET /api/favorites`, `POST /api/favorites`, `DELETE /api/favorites/{menuItemId}`.',
+  '- Keranjang: `GET /api/cart`, `POST /api/cart/items`, `PATCH /api/cart/items/{id}`,',
+  '  `DELETE /api/cart/items/{id}`. Ikon jumlah di AppBar memakai `data.totalQuantity`.',
+  '- Checkout: `POST /api/orders`. Jawabannya selalu daftar pesanan, satu per kantin.',
+  '- Pesanan aktif: `GET /api/orders?scope=active`. Riwayat: `GET /api/orders?scope=history`.',
+  '- Detail dan timeline pesanan: `GET /api/orders/{id}`. Timeline disusun dari `status`, dengan',
+  '  urutan menunggu_konfirmasi, diproses, siap_diambil, selesai.',
+  '- Batalkan: `PATCH /api/orders/{id}/cancel`, tombol tampil bila `isCancellable` bernilai `true`.',
+  '',
+  '**Penjual**',
+  '- Dasbor: `GET /api/seller/dashboard`.',
+  '- Tab pesanan: `GET /api/seller/orders?status=menunggu_konfirmasi`, `status=diproses`,',
+  '  `status=siap_diambil`, dan `scope=history` untuk yang sudah berakhir.',
+  '- Tindakan pesanan: `PATCH /api/seller/orders/{id}/accept`, `/reject`, `/ready`, `/complete`.',
+  '- Menu: `GET /api/seller/menu`, `POST /api/seller/menu`, `PATCH /api/seller/menu/{id}`,',
+  '  `DELETE /api/seller/menu/{id}`, foto lewat `POST /api/seller/menu/{id}/photo`.',
+  '- Kantin sendiri: `GET`, `POST`, `PATCH /api/seller/canteen`, foto lewat `POST /api/seller/canteen/photo`.',
+  '',
+  '**Kedua peran**',
+  '- Profil: `GET /api/users/me`, `PATCH /api/users/me`, `GET /api/users/me/stats`,',
+  '  foto lewat `POST /api/users/me/photo`.',
+  '- Notifikasi: `GET /api/notifications`, `GET /api/notifications/unread-count`,',
+  '  `PATCH /api/notifications/{id}/read`, `PATCH /api/notifications/read-all`.',
+  '- Pesan push: daftarkan token FCM lewat `POST /api/notifications/devices` setelah masuk,',
+  '  dan hapus lewat `DELETE /api/notifications/devices/{token}` saat keluar.',
+  '- Keluar: `POST /api/auth/logout`.',
 ].join('\n');
 
 const tags = [
@@ -76,7 +122,8 @@ const tags = [
   {
     name: 'Keranjang',
     description:
-      'Mengelola isi keranjang pembeli. Satu keranjang hanya boleh memuat menu dari satu kantin.',
+      'Mengelola isi keranjang pembeli. Keranjang boleh memuat menu dari beberapa kantin, dan saat ' +
+      'pesanan dibuat isinya dipecah menjadi satu pesanan untuk tiap kantin.',
   },
   {
     name: 'Pesanan',
@@ -106,7 +153,9 @@ function errorResponse(description, code, example) {
 
 const responses = {
   Unauthorized: errorResponse(
-    'Belum masuk, atau sesi sudah tidak berlaku.',
+    'Belum masuk, atau sesi sudah tidak berlaku. Kode yang mungkin: `UNAUTHENTICATED` (tanpa kunci akses), ' +
+      '`TOKEN_EXPIRED` (kunci akses kedaluwarsa), dan `INVALID_TOKEN` (kunci akses rusak atau akunnya sudah ' +
+      'tidak ada). Ketiganya ditangani sama: hapus kunci akses lalu arahkan ke halaman masuk.',
     'UNAUTHENTICATED',
     'Anda belum masuk. Silakan masuk terlebih dahulu.',
   ),
@@ -136,6 +185,7 @@ const responses = {
     'Cara masuk ini tidak tersedia pada server ini.',
   ),
   NotFound: errorResponse('Data tidak ditemukan.', 'NOT_FOUND', 'Data tidak ditemukan'),
+  CanteenNotFound: errorResponse('Kantin tidak ditemukan.', 'CANTEEN_NOT_FOUND', 'Kantin tidak ditemukan'),
   MenuNotFound: errorResponse('Menu tidak ditemukan.', 'MENU_NOT_FOUND', 'Menu tidak ditemukan'),
   OrderNotFound: errorResponse(
     'Pesanan tidak ditemukan, atau bukan milik Anda.',

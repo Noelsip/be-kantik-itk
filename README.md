@@ -72,7 +72,7 @@ menyebutkan variabel mana yang bermasalah.
 
 ```bash
 npm run db:migrate    # membuat database dan seluruh tabelnya
-npm run db:seed       # mengisi data contoh untuk pengembangan
+npm run db:seed       # mengisi data contoh, ditolak bila NODE_ENV=production
 ```
 
 Perintah lain yang tersedia:
@@ -450,8 +450,13 @@ kategori terpisah. Kategori baru dijawab `201`, yang dipakai kembali `200`.
 
 Daftar kantin dan menu dapat diurutkan lewat `sortBy` dan `sortOrder`. Untuk
 kantin, `sortBy` menerima `name`, `menuCount`, atau `createdAt`; untuk menu,
-`name`, `price`, atau `createdAt`. Kantin yang buka dan menu yang tersedia tetap
-didahulukan. Nilai di luar daftar tersebut ditolak.
+`name`, `price`, `createdAt`, atau `popular`. Kantin yang buka dan menu yang
+tersedia tetap didahulukan. Nilai di luar daftar tersebut ditolak.
+
+Menu populer untuk halaman Home diambil dari
+`/api/menu?sortBy=popular&isAvailable=true&limit=10`. Urutannya dari porsi
+terjual terbanyak pada pesanan yang tidak ditolak maupun dibatalkan, dan
+angkanya ikut terkirim pada field `soldCount` di setiap daftar menu.
 
 Ketika diakses pembeli, setiap menu menyertakan `isFavorite` sehingga tombol
 favorit pada aplikasi dapat langsung menampilkan keadaan yang benar.
@@ -573,7 +578,11 @@ isi keranjang tetap utuh.
 | PATCH | `/api/seller/orders/:id/ready` | Menandai siap diambil |
 | PATCH | `/api/seller/orders/:id/complete` | Menyelesaikan pesanan |
 
-Penjelasan lengkap setiap endpoint tersedia pada `/docs-api`.
+Daftar pesanan masuk menerima `scope` (`active`, `history`, `all`) dan `status`,
+sama seperti daftar pesanan pembeli.
+
+Penjelasan lengkap setiap endpoint, termasuk endpoint yang dipakai tiap halaman
+aplikasi, tersedia pada `/docs-api`.
 
 ---
 
@@ -729,11 +738,11 @@ menyediakan nomor induk sementara kolom tersebut bersifat wajib dan unik.
 
 ## Batasan yang Diketahui
 
-- Gambar menu dan foto profil disimpan sebagai alamat URL. Belum ada fasilitas
-  unggah berkas.
-- Pemberitahuan masih mengandalkan pembacaan ulang status oleh aplikasi. Belum ada
-  pengiriman notifikasi.
-- Belum ada jalur untuk mengelola kategori dari sisi penjual. Kategori diisi
-  melalui data contoh.
+- Gambar yang diunggah disimpan apa adanya, tanpa dikompresi server (batas 5 MB).
+  Kompresi sebaiknya dilakukan di aplikasi sebelum unggah, misalnya lewat
+  `imageQuality` dan `maxWidth` pada `image_picker`.
+- Pesan push memerlukan kredensial Firebase. Tanpa kredensial, riwayat
+  notifikasi tetap tersimpan dan dapat dibaca lewat `/api/notifications`.
+- Kategori hanya dapat ditambah, belum dapat diubah atau dihapus.
 - Fitur di luar cakupan, seperti pembayaran daring, pengantaran, percakapan, dan
   penilaian, memang tidak dibuat.

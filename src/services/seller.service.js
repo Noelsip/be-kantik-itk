@@ -1,7 +1,13 @@
 import { withTransaction } from '../config/database.js';
 import ERROR_CODES from '../constants/errorCodes.js';
 import { BusinessRuleError, ConflictError, NotFoundError } from '../utils/errors.js';
-import { ORDER_STATUS, ORDER_ACTIVE_STATUSES, canTransition, formatStatus } from '../constants/orderStatus.js';
+import {
+  ORDER_STATUS,
+  ORDER_ACTIVE_STATUSES,
+  ORDER_HISTORY_STATUSES,
+  canTransition,
+  formatStatus,
+} from '../constants/orderStatus.js';
 import { toDecimalString, toMinorUnits } from '../utils/money.js';
 import { buildPaginationMeta } from '../utils/response.js';
 import { toMenuResponse, toOwnedCanteenResponse, toSellerOrderResponse } from '../utils/presenters.js';
@@ -159,7 +165,9 @@ export async function listIncomingOrders(ownerId, filters = {}) {
     ? [filters.status]
     : filters.scope === 'active'
       ? [...ORDER_ACTIVE_STATUSES]
-      : undefined;
+      : filters.scope === 'history'
+        ? [...ORDER_HISTORY_STATUSES]
+        : undefined;
 
   const { rows, total, pagination } = await orderRepository.findAll({
     ownerId,

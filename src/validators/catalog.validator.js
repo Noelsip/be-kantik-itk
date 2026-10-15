@@ -22,7 +22,7 @@ export const menuListQuerySchema = paginationSchema.extend({
   categoryId: idSchema.optional(),
   canteenId: idSchema.optional(),
   isAvailable: optionalBooleanSchema,
-  sortBy: z.enum(['name', 'price', 'createdAt']).optional(),
+  sortBy: z.enum(['name', 'price', 'createdAt', 'popular']).optional(),
   sortOrder: sortOrderSchema,
 });
 
@@ -31,7 +31,7 @@ export const canteenMenuQuerySchema = paginationSchema.extend({
   search: searchSchema,
   categoryId: idSchema.optional(),
   isAvailable: optionalBooleanSchema,
-  sortBy: z.enum(['name', 'price', 'createdAt']).optional(),
+  sortBy: z.enum(['name', 'price', 'createdAt', 'popular']).optional(),
   sortOrder: sortOrderSchema,
 });
 

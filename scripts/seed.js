@@ -149,6 +149,14 @@ async function upsertMenuItem(connection, canteenId, categoryIds, item) {
 
 /** Mengisi database dengan data contoh. */
 async function seed() {
+  // Data contoh tidak boleh masuk ke database produksi karena langsung tampil
+  // di aplikasi sebagai kantin dan menu sungguhan.
+  if (process.env.NODE_ENV === 'production') {
+    logger.error('Seed ditolak: NODE_ENV=production. Data contoh hanya untuk pengembangan.');
+    process.exitCode = 1;
+    return;
+  }
+
   logger.info('Mengisi data contoh untuk pengembangan...');
 
   await withTransaction(async (connection) => {
